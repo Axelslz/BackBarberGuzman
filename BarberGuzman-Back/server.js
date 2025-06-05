@@ -30,6 +30,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const citasRoutes = require('./routes/citasRoutes');
 const authRoutes = require('./routes/authRoutes');
+const barberRoutes = require('./routes/barberRoutes'); 
+const servicioRoutes = require('./routes/servicioRoutes'); 
 const errorMiddleware = require('./middlewares/errorMiddleware');
 require('dotenv').config();
 
@@ -39,8 +41,10 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json());
 
-app.use('/api/citas', citasRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/barberos', barberRoutes); 
+app.use('/api/servicios', servicioRoutes); 
+app.use('/api/citas', citasRoutes);
 
 app.use(errorMiddleware);
 

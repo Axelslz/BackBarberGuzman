@@ -3,62 +3,92 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const registrar = async (req, res, next) => {
-  try {
-    const { name, lastname, correo, password, confirmPassword } = req.body;
+    try {
+        const { name, lastname, correo, password, confirmPassword } = req.body; // No esperamos role ni id_barbero aquí
 
-    if (password !== confirmPassword) {
-      return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' });
+        if (password !== confirmPassword) {
+            return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' });
+        }
+
+        const usuarioExistente = await Usuario.buscarPorCorreo(correo);
+        if (usuarioExistente) {
+            return res.status(400).json({ mensaje: 'El correo ya está registrado' });
+        }
+
+        // El rol por defecto será 'cliente' desde el modelo.
+        const nuevoUsuario = await Usuario.crear({ name, lastname, correo, password });
+
+        const token = jwt.sign(
+            { id: nuevoUsuario.id, role: nuevoUsuario.role }, // nuevoUsuario.role será 'cliente'
+            process.env.JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        res.status(201).json({
+            mensaje: 'Usuario registrado exitosamente',
+            token,
+            usuario: {
+                id: nuevoUsuario.id,
+                name: nuevoUsuario.name,
+                correo: nuevoUsuario.correo,
+                role: nuevoUsuario.role
+            }
+        });
+    } catch (error) {
+        console.error('Error en registro:', error);
+        next(error);
     }
-
-    const usuarioExistente = await Usuario.buscarPorCorreo(correo);
-    if (usuarioExistente) {
-      return res.status(400).json({ mensaje: 'El correo ya está registrado' });
-    }
-
-    await Usuario.crear({ name, lastname, correo, password });
-
-    res.json({ mensaje: 'Usuario registrado exitosamente' });
-  } catch (error) {
-    next(error);
-  }
 };
+
 
 const login = async (req, res, next) => {
     try {
-      const { correo, password } = req.body;
-  
-      const usuario = await Usuario.buscarPorCorreo(correo);
-  
-      if (!usuario) {
-        return res.status(400).json({ mensaje: 'Credenciales inválidas' });
-      }
-  
-      const passwordValido = await bcrypt.compare(password, usuario.password);
-  
-      if (!passwordValido) {
-        return res.status(400).json({ mensaje: 'Credenciales inválidas' });
-      }
-  
-      // Aquí generamos el token
-      const token = jwt.sign(
-        { id: usuario.id, role: usuario.role },  // <-- Incluimos el id y role
-        process.env.JWT_SECRET,                 // <-- Secret que pondremos en .env
-        { expiresIn: '8h' }                      // <-- El token durará 8 horas
-      );
-  
-      res.json({
-        mensaje: 'Login exitoso',
-        token, // <-- Aquí enviamos también el token
-        usuario: {
-          id: usuario.id,
-          name: usuario.name,
-          correo: usuario.correo,
-          role: usuario.role
+        const { correo, password } = req.body;
+
+        const usuario = await Usuario.buscarPorCorreo(correo);
+
+        if (!usuario) {
+            return res.status(400).json({ mensaje: 'Credenciales inválidas' });
         }
-      });
+
+        const passwordValido = await bcrypt.compare(password, usuario.password);
+
+        if (!passwordValido) {
+            return res.status(400).json({ mensaje: 'Credenciales inválidas' });
+        }
+
+        // Incluir id_barbero en el token si el usuario tiene uno asociado
+        const tokenPayload = {
+            id: usuario.id,
+            role: usuario.role,
+        };
+
+        // ESTA ES LA PARTE CRUCIAL: Si el usuario logueado tiene un id_barbero en la DB,
+        // lo agregamos al payload del token.
+        if (usuario.id_barbero) {
+            tokenPayload.id_barbero = usuario.id_barbero;
+        }
+
+        const token = jwt.sign(
+            tokenPayload, // Usamos el payload modificado
+            process.env.JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        res.json({
+            mensaje: 'Login exitoso',
+            token,
+            usuario: {
+                id: usuario.id,
+                name: usuario.name,
+                correo: usuario.correo,
+                role: usuario.role,
+                id_barbero: usuario.id_barbero // Devolvemos también el id_barbero si existe
+            }
+        });
     } catch (error) {
-      next(error);
+        next(error);
     }
-  };
+};
 
 module.exports = { registrar, login };
