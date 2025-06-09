@@ -6,6 +6,7 @@ const { authenticateToken, authorizeRole } = require('../middlewares/authMiddlew
 // Ruta pública para obtener todos los barberos (ej. para un cliente que va a agendar)
 router.get('/', barberController.getBarberos);
 
+router.get('/:id', barberController.getBarberoById);
 // --- Rutas protegidas para el Barbero Admin (usuarios con rol 'admin' y id_barbero) ---
 // Usamos 'admin' como el rol que tú asignarás manualmente.
 // Si decidiste crear un rol 'barberoAdmin' específico, cámbialo aquí.

@@ -14,7 +14,8 @@ const {
     actualizarCita,
     obtenerCitasPorDia,
     obtenerCitasPorMes,
-    obtenerTotalDelDia
+    obtenerTotalDelDia,
+    getDisponibilidadBarbero
 } = require('../controllers/citasController'); // ¡Re-confirma que el archivo se llama "citasController.js"!
 
 // Todos los usuarios autenticados pueden agendar citas
@@ -37,6 +38,8 @@ router.get('/total-dia/:fecha', authenticateToken, authorizeRole(['admin']), obt
 
 // Si 'obtenerCitas' es para ver TODAS las citas, solo admin debería tener acceso.
 router.get('/', authenticateToken, authorizeRole(['admin']), obtenerCitas);
+
+router.get('/disponibilidad', getDisponibilidadBarbero);
 
 module.exports = router;
 

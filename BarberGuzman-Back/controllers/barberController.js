@@ -113,3 +113,18 @@ exports.getHistorialBarberoPorAño = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.getBarberoById = async (req, res, next) => {
+    const { id } = req.params; // Obtiene el ID de los parámetros de la URL
+    try {
+        // *** CAMBIO AQUÍ: Usamos el modelo Barbero.getById() ***
+        const barbero = await Barbero.getById(id);
+        if (!barbero) { // getById devuelve undefined si no encuentra nada
+            return res.status(404).json({ message: 'Barbero no encontrado.' });
+        }
+        res.json(barbero); // Devuelve el objeto barbero directamente
+    } catch (error) {
+        console.error(`Error al obtener barbero con ID ${id}:`, error);
+        next(error); // Pasa el error al middleware de errores
+    }
+};

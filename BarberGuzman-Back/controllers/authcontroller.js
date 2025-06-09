@@ -91,4 +91,31 @@ const login = async (req, res, next) => {
     }
 };
 
-module.exports = { registrar, login };
+const getMe = async (req, res, next) => {
+    try {
+        // req.user viene del middleware authenticateToken y contiene el ID del usuario
+        const usuarioId = req.user.id;
+
+        const usuario = await Usuario.buscarPorId(usuarioId); // <- Necesitarás un método buscarPorId en Usuario.js
+
+        if (!usuario) {
+            return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
+        }
+
+        // Devolvemos la información relevante del usuario
+        res.json({
+            id: usuario.id,
+            name: usuario.name,
+            lastname: usuario.lastname,
+            correo: usuario.correo,
+            role: usuario.role,
+            id_barbero: usuario.id_barbero,
+            citas_completadas: usuario.citas_completadas // <- Aquí está el contador
+        });
+    } catch (error) {
+        console.error('Error al obtener perfil del usuario:', error);
+        next(error);
+    }
+};
+
+module.exports = { registrar, login, getMe};

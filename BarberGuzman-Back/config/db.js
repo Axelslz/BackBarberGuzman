@@ -80,6 +80,30 @@ async function initializeDatabase() {
         await connection.execute(createAppointmentsTableSql);
         console.log('Tabla "citas" verificada/creada exitosamente.');
 
+        // SQL para crear la tabla 'about_info' si no existe
+        const createAboutInfoTableSql = `
+            CREATE TABLE IF NOT EXISTS about_info (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                titulo VARCHAR(255) NOT NULL,
+                parrafo1 TEXT,
+                parrafo2 TEXT,
+                imagen_url1 VARCHAR(255),
+                imagen_url2 VARCHAR(255),
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            );
+        `;
+        await connection.execute(createAboutInfoTableSql);
+        console.log('Tabla "about_info" verificada/creada exitosamente.');
+
+        // Opcional: Insertar una fila inicial si la tabla está vacía
+        const [rows] = await connection.query('SELECT COUNT(*) AS count FROM about_info');
+        if (rows[0].count === 0) {
+            await connection.execute(`
+                INSERT INTO about_info (id, titulo, parrafo1, parrafo2, imagen_url1, imagen_url2)
+                VALUES (1, 'Bienvenidos a nuestra Barbería', 'Somos un equipo de barberos apasionados por el arte del cuidado masculino. Ofrecemos cortes modernos, afeitados clásicos y tratamientos de barba personalizados para que siempre luzcas tu mejor versión.', 'En nuestra barbería, la tradición se encuentra con la innovación. Utilizamos productos de alta calidad y técnicas vanguardistas para garantizar resultados excepcionales y una experiencia inigualable en cada visita. ¡Te esperamos para transformar tu estilo!', '', '');
+            `);
+            console.log('Fila inicial insertada en "about_info".');
+        }
 
         connection.release(); 
     } catch (err) {

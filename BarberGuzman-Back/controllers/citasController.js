@@ -2,30 +2,32 @@
 const Cita = require('../models/Cita');
 const Servicio = require('../models/Servicio');
 const Barbero = require('../models/Barbero');
+const Usuario = require('../models/Usuario');
 const moment = require('moment');
 require('moment/locale/es'); // Para asegurar que format('dddd') devuelva en español
-const moment_timezone = require('moment-timezone'); // Usaremos este para cálculos de hora_fin
 
 // Horarios de trabajo fijos por día de la semana
+// ¡¡IMPORTANTE!! Asegúrate de que los días de la semana y los acentos sean EXACTOS
+// como los devuelve moment.locale('es').format('dddd')
 const WORK_HOURS = {
-    Lunes: { start: '10:00', end: '20:00' },
-    Martes: { start: '10:00', end: '20:00' },
-    Miercoles: { start: '10:00', end: '20:00' },
-    Jueves: { start: '10:00', end: '20:00' },
-    Viernes: { start: '10:00', end: '20:00' },
-    Sabado: { start: '10:00', end: '17:00' },
-    Domingo: { start: '10:00', end: '13:00' },
+    'lunes': { start: '10:00', end: '20:00' }, // Cambiado a minúscula si moment.js devuelve así
+    'martes': { start: '10:00', end: '20:00' },
+    'miércoles': { start: '10:00', end: '20:00' }, // Asegurado con acento y minúscula
+    'jueves': { start: '10:00', end: '20:00' },
+    'viernes': { start: '10:00', end: '20:00' },
+    'sábado': { start: '10:00', end: '17:00' }, // Asegurado con acento y minúscula
+    'domingo': { start: '10:00', end: '13:00' },
 };
 
 // Función para generar intervalos de tiempo
-function generateTimeSlots(start, end, intervalMinutes = 30) {
+// Ahora genera los slots en formato 'HH:mm' para facilitar la comparación
+function generateTimeSlots(start, end, intervalMinutes = 60) { // <-- Mantenido en 60 minutos
     const slots = [];
     let currentTime = moment(start, 'HH:mm');
     const endTime = moment(end, 'HH:mm');
 
-    // Asegurarse de incluir el último slot si es un múltiplo del intervalo y no excede la hora de fin
     while (currentTime.isBefore(endTime)) {
-        slots.push(currentTime.format('HH:mm'));
+        slots.push(currentTime.format('HH:mm')); // Formato 24h para comparación
         currentTime.add(intervalMinutes, 'minutes');
     }
     return slots;
@@ -49,40 +51,48 @@ exports.getDisponibilidadBarbero = async (req, res, next) => {
             return res.status(400).json({ message: 'Formato de fecha inválido. Use YYYY-MM-DD.' });
         }
 
-        const dayOfWeek = dateMoment.locale('es').format('dddd'); // 'lunes', 'martes', etc.
-        const dayMap = {
-            'lunes': 'Lunes', 'martes': 'Martes', 'miércoles': 'Miercoles', 'jueves': 'Jueves',
-            'viernes': 'Viernes', 'sábado': 'Sabado', 'domingo': 'Domingo'
-        };
-        const dayKey = dayMap[dayOfWeek.toLowerCase()];
+        // Obtener el día de la semana en minúsculas y con acentos (lo que moment.js suele devolver)
+        const dayKey = dateMoment.locale('es').format('dddd').toLowerCase(); // <-- CAMBIO CLAVE AQUÍ: toLowerCase()
+        
+        // *** ESTO ES MUY IMPORTANTE PARA DEPURAR ***
+        // Loguea el valor exacto de dayKey y las claves de WORK_HOURS para comparación
+        console.log("Día de la semana obtenido por moment (dayKey):", dayKey); 
+        console.log("Días definidos en WORK_HOURS:", Object.keys(WORK_HOURS));
+        // *****************************************
 
-        if (!dayKey || !WORK_HOURS[dayKey]) {
-            return res.status(400).json({ message: 'Día de la semana no válido o sin horario definido para el barbero.' });
+        if (!WORK_HOURS[dayKey]) {
+            return res.status(400).json({ message: `Día de la semana "${dayKey}" no válido o sin horario definido para el barbero.` });
         }
 
         const { start, end } = WORK_HOURS[dayKey];
-        const allPossibleSlots = generateTimeSlots(start, end, 30);
+        const allPossibleSlots_24h = generateTimeSlots(start, end, 60); // <-- Slots cada 60 minutos
 
         const citasOcupadas = await Cita.getCitasByBarberoAndDate(idBarbero, fecha);
 
-        const availability = allPossibleSlots.map(slot => {
+        const availability = allPossibleSlots_24h.map(slot24h => {
+            const slotMoment = moment(slot24h, 'HH:mm'); // El momento del slot actual
+
             const isOccupied = citasOcupadas.some(cita => {
-                const slotMoment = moment(slot, 'HH:mm');
                 const citaStart = moment(cita.hora_inicio, 'HH:mm:ss');
                 const citaEnd = moment(cita.hora_fin, 'HH:mm:ss');
                 
-                return slotMoment.isSameOrAfter(citaStart) && slotMoment.isBefore(citaEnd);
+                // Comprobamos si el slot actual (AHORA de 60 minutos) se solapa con una cita existente
+                const slotEndMoment = slotMoment.clone().add(60, 'minutes'); // <-- Asegurado a 60 minutos
+
+                return (slotMoment.isBefore(citaEnd) && slotEndMoment.isAfter(citaStart));
             });
+
             return {
-                time: slot,
-                available: !isOccupied
+                hora_inicio_24h: slot24h,
+                hora_inicio: slotMoment.format('h:mm A'), // Formato AM/PM para el frontend
+                disponible: !isOccupied
             };
         });
 
         res.status(200).json({
             barbero: { id: barbero.id, nombre: barbero.nombre, apellido: barbero.apellido },
             fecha: fecha,
-            disponibilidad: availability
+            disponibilidad: availability // Esto se envía al frontend
         });
 
     } catch (error) {
@@ -105,21 +115,28 @@ exports.crearCita = async (req, res, next) => {
             return res.status(404).json({ message: 'Servicio no encontrado.' });
         }
 
-        const duracion_minutos = servicio.duracion_minutos;
+        // *** CAMBIO TEMPORAL AQUÍ: Forzar duracion_minutos a 60 si es necesario ***
+        // Por ahora, forzaremos la duración a 60 minutos para todas las citas.
+        // Cuando tengas las duraciones reales de los servicios, deberías usar:
+        // const duracion_minutos = servicio.duracion_minutos;
+        const duracion_minutos = 60; // Temporalmente forzamos a 60 minutos
+        // *******************************************************************
 
-        const dayOfWeek = moment(fecha_cita).locale('es').format('dddd');
-        const dayMap = {
-            'lunes': 'Lunes', 'martes': 'Martes', 'miércoles': 'Miercoles', 'jueves': 'Jueves',
-            'viernes': 'Viernes', 'sábado': 'Sabado', 'domingo': 'Domingo'
-        };
-        const dayKey = dayMap[dayOfWeek.toLowerCase()];
+        const dayOfWeek = moment(fecha_cita).locale('es').format('dddd').toLowerCase(); // <-- toLowerCase()
+        const dayKey = dayOfWeek; // dayKey ya es la cadena en minúsculas y con acentos
 
-        if (!dayKey || !WORK_HOURS[dayKey]) {
+        if (!WORK_HOURS[dayKey]) {
             return res.status(400).json({ message: 'Día de la semana no válido o sin horario definido para el barbero.' });
         }
 
         const { start, end } = WORK_HOURS[dayKey];
-        const requestedStartTime = moment(hora_inicio, 'HH:mm');
+        
+        // Asegúrate de que hora_inicio que llega aquí sea 'HH:mm'
+        // Si desde el frontend envías 'h:mm A' (ej. '10:00 AM'), necesitarás parsearlo:
+        // const requestedStartTime = moment(hora_inicio, 'h:mm A'); 
+        // Si viene de tu `hora_inicio_24h` de la respuesta de disponibilidad, será `HH:mm`:
+        const requestedStartTime = moment(hora_inicio, 'HH:mm'); // Usamos HH:mm asumiendo que el frontend lo envía así
+
         const workingStartTime = moment(start, 'HH:mm');
         const workingEndTime = moment(end, 'HH:mm');
 
@@ -129,7 +146,7 @@ exports.crearCita = async (req, res, next) => {
         }
 
         // Calcular la hora de fin de la nueva cita
-        const newAppointmentEnd = moment(hora_inicio, 'HH:mm').add(duracion_minutos, 'minutes');
+        const newAppointmentEnd = requestedStartTime.clone().add(duracion_minutos, 'minutes');
 
         // Validar que la hora de fin de la nueva cita no exceda el horario de cierre
         if (newAppointmentEnd.isAfter(workingEndTime)) {
@@ -143,6 +160,7 @@ exports.crearCita = async (req, res, next) => {
             const existingStart = moment(cita.hora_inicio, 'HH:mm:ss');
             const existingEnd = moment(cita.hora_fin, 'HH:mm:ss');
 
+            // Verifica si la nueva cita se solapa con alguna existente
             return (requestedStartTime.isBefore(existingEnd) && newAppointmentEnd.isAfter(existingStart));
         });
 
@@ -150,13 +168,16 @@ exports.crearCita = async (req, res, next) => {
             return res.status(409).json({ message: 'La hora seleccionada ya está ocupada o se solapa con otra cita.' });
         }
 
+        // Si todo es válido, procede a crear la cita
         const nuevaCita = await Cita.crear({
             id_cliente,
             id_barbero,
             id_servicio,
             fecha_cita,
-            hora_inicio,
-            duracion_minutos
+            // Guardar hora_inicio y hora_fin en formato HH:mm:ss para la base de datos
+            hora_inicio: requestedStartTime.format('HH:mm:ss'),
+            hora_fin: newAppointmentEnd.format('HH:mm:ss'), 
+            duracion_minutos // Este es el valor que se guardará en la BD si la columna existe
         });
 
         res.status(201).json({
@@ -201,24 +222,36 @@ exports.obtenerCitas = async (req, res, next) => {
 exports.actualizarCita = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { nuevoEstado } = req.body; // Solo permitiremos actualizar el estado por ahora
+        const { nuevoEstado } = req.body; // Asumimos que se envía 'nuevoEstado' en el body
 
-        if (!nuevoEstado) {
-            return res.status(400).json({ message: 'Se requiere un nuevo estado para la cita.' });
-        }
-        // Puedes agregar validación para los estados permitidos
-        const estadosValidos = ['pendiente', 'confirmada', 'cancelada', 'completada'];
-        if (!estadosValidos.includes(nuevoEstado)) {
-            return res.status(400).json({ message: 'Estado de cita inválido.' });
+        // Opcional: Obtener la cita actual para verificar el estado anterior si es necesario
+        // const citaActual = await Cita.obtenerCitaPorId(id); // Necesitarías este método
+
+        // Actualiza el estado de la cita
+        await Cita.actualizarEstado(id, nuevoEstado);
+
+        // Si el nuevo estado es 'completada', incrementa el contador del cliente
+        // También asegúrate de que no se haya contado ya, si tienes una columna 'contador_actualizado'
+        if (nuevoEstado === 'completada') {
+            // Necesitas obtener el id_cliente de la cita
+            // Asegúrate de que 'db' esté importado o accesible aquí si no lo está globalmente.
+            const db = require('../config/db'); 
+            const [citaInfo] = await db.query('SELECT id_cliente, contador_actualizado FROM citas WHERE id = ?', [id]);
+
+            if (citaInfo && citaInfo.length > 0) {
+                const { id_cliente, contador_actualizado } = citaInfo[0];
+
+                if (contador_actualizado === 0) { // Solo si no se ha actualizado el contador para esta cita
+                    await Usuario.incrementarCitasCompletadas(id_cliente);
+                    await db.query('UPDATE citas SET contador_actualizado = 1 WHERE id = ?', [id]); // Marcar como contado
+                    console.log(`Contador de citas completadas incrementado para usuario ${id_cliente}`);
+                }
+            }
         }
 
-        const actualizado = await Cita.actualizarEstado(id, nuevoEstado);
-        if (!actualizado) {
-            return res.status(404).json({ message: 'Cita no encontrada o no se pudo actualizar.' });
-        }
-        res.status(200).json({ message: 'Cita actualizada exitosamente.' });
+        res.status(200).json({ mensaje: 'Estado de la cita actualizado exitosamente' });
     } catch (error) {
-        console.error('Error al actualizar cita:', error);
+        console.error('Error al actualizar el estado de la cita:', error);
         next(error);
     }
 };
