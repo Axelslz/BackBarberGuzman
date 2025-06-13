@@ -1,25 +1,36 @@
-
+// middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
+const Usuario = require('../models/Usuario');
 
 exports.authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Formato: Bearer TOKEN
+    const token = authHeader && authHeader.split(' ')[1]; 
 
     if (token == null) {
         return res.status(401).json({ message: 'Acceso denegado. No se proporcionó token.' });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) {
-            console.error('Error al verificar token:', err);
-            return res.status(403).json({ message: 'Token inválido o expirado.' });
+    jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
+        if (err) return res.sendStatus(403); // Token inválido
+
+        // *** AÑADIR ESTO ***
+        // Buscar el usuario en la base de datos para obtener el rol actualizado
+        try {
+            const fullUser = await Usuario.getById(user.id); // Asumiendo que tu token tiene el ID del usuario
+            if (!fullUser) {
+                return res.status(403).json({ message: 'Usuario no encontrado.' });
+            }
+            req.usuario = fullUser; // Adjuntar el objeto completo del usuario (con role) a la solicitud
+            req.user = user; // Mantener req.user si lo usas en otras partes para el payload del token
+            next();
+        } catch (dbError) {
+            console.error('Error al buscar usuario en DB para autenticación:', dbError);
+            res.sendStatus(500); // Error interno del servidor
         }
-        req.user = user; // Almacena la información del usuario en el objeto de la petición
-        next();
     });
 };
 
-exports.authorizeRole = (roles) => { // roles puede ser un string 'admin' o un array ['admin', 'barbero']
+exports.authorizeRole = (roles) => { 
     return (req, res, next) => {
         if (!req.user || !req.user.role) {
             return res.status(403).json({ message: 'Acceso denegado. Rol no definido.' });

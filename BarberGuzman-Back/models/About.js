@@ -15,6 +15,7 @@ class About {
      * Actualiza la información de la sección "Sobre Mí".
      * Se espera que siempre se actualice la fila con ID 1 (asumiendo que es la única).
      * Si no existe, se inserta.
+     * Los campos imagen_url1 e imagen_url2 ahora contendrán URLs de Cloudinary.
      */
     static async updateAboutInfo({ titulo, parrafo1, parrafo2, imagen_url1, imagen_url2 }) {
         // Primero, intentar actualizar la fila existente (ID 1)

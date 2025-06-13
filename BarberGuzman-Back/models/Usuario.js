@@ -1,34 +1,67 @@
+// models/Usuario.js
 const db = require('../config/db');
-const bcrypt = require('bcryptjs');
 
 class Usuario {
-    static async crear({ name, lastname, correo, password }) {
-        const hashedPassword = await bcrypt.hash(password, 10);
+    static async create({ name, lastname, correo, password, role }) {
         const [result] = await db.query(
-            // Ahora insertamos con el valor por defecto de citas_completadas
-            'INSERT INTO usuarios (name, lastname, correo, password, role, citas_completadas) VALUES (?, ?, ?, ?, ?, ?)',
-            [name, lastname, correo, hashedPassword, 'cliente', 0] // 0 por defecto
+            'INSERT INTO usuarios (name, lastname, correo, password, role, citas_completadas) VALUES (?, ?, ?, ?, ?, 0)',
+            [name, lastname, correo, password, role]
         );
-        return { id: result.insertId, name, lastname, correo, role: 'cliente', citas_completadas: 0 };
+        return { id: result.insertId, name, lastname, correo, role };
     }
 
-    static async buscarPorCorreo(correo) {
-        // Asegúrate de seleccionar también 'citas_completadas'
-        const [usuarios] = await db.query('SELECT id, name, lastname, correo, password, role, id_barbero, citas_completadas FROM usuarios WHERE correo = ?', [correo]);
-        return usuarios[0];
+    static async getById(id) {
+        const [rows] = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
+        return rows[0]; // Devuelve el primer resultado (el usuario)
     }
 
-    // Nuevo método para incrementar el contador de citas completadas
-    static async incrementarCitasCompletadas(id_usuario) {
-        await db.query(
+    static async findByCorreo(correo) {
+        const [rows] = await db.query(`
+            SELECT
+                u.id, u.name, u.lastname, u.correo, u.password, u.role, u.citas_completadas,
+                b.id AS id_barbero, b.especialidad
+            FROM usuarios u
+            LEFT JOIN barberos b ON u.id = b.id_usuario
+            WHERE u.correo = ?
+        `, [correo]);
+        return rows[0];
+    }
+
+    static async findById(id) {
+        const [rows] = await db.query(`
+            SELECT
+                u.id, u.name, u.lastname, u.correo, u.role, u.citas_completadas,
+                b.id AS id_barbero, b.especialidad
+            FROM usuarios u
+            LEFT JOIN barberos b ON u.id = b.id_usuario
+            WHERE u.id = ?
+        `, [id]);
+        return rows[0];
+    }
+
+    static async updateRole(id, newRole) {
+        const [result] = await db.query('UPDATE usuarios SET role = ? WHERE id = ?', [newRole, id]);
+        return result.affectedRows > 0;
+    }
+
+    static async incrementarCitasCompletadas(id_cliente) {
+        const [result] = await db.query(
             'UPDATE usuarios SET citas_completadas = citas_completadas + 1 WHERE id = ?',
-            [id_usuario]
+            [id_cliente]
         );
+        return result.affectedRows > 0;
     }
-    static async buscarPorId(id) {
-        // Asegúrate de seleccionar todas las columnas relevantes, incluyendo citas_completadas
-        const [usuarios] = await db.query('SELECT id, name, lastname, correo, password, role, id_barbero, citas_completadas FROM usuarios WHERE id = ?', [id]);
-        return usuarios[0];
+
+    static async getAllUsersWithBarberInfo() {
+        const [users] = await db.query(`
+            SELECT
+                u.id, u.name, u.lastname, u.correo, u.role, u.citas_completadas,
+                b.id AS barbero_id, b.especialidad AS barbero_especialidad, b.foto_perfil_url AS barbero_foto
+            FROM usuarios u
+            LEFT JOIN barberos b ON u.id = b.id_usuario
+            ORDER BY u.id ASC
+        `);
+        return users;
     }
 }
 

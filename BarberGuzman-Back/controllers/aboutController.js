@@ -1,44 +1,29 @@
-// controllers/aboutController.js
 const About = require('../models/About');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs'); // Para manejar la eliminación de archivos
+const cloudinary = require('../config/cloudinaryConfig'); 
 
-// Configuración de Multer para la subida de imágenes
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path.join(__dirname, '../uploads/about');
-        // Asegúrate de que el directorio exista
-        fs.mkdirSync(uploadPath, { recursive: true });
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        // Genera un nombre de archivo único para evitar colisiones
-        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-    }
-});
+const storage = multer.memoryStorage();
 
-const upload = multer({
+exports.upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Límite de 5MB por imagen
+    limits: { fileSize: 5 * 1024 * 1024 }, 
     fileFilter: (req, file, cb) => {
         const filetypes = /jpeg|jpg|png|gif/;
         const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        const extname = filetypes.test(file.originalname.toLowerCase().split('.').pop());
 
         if (mimetype && extname) {
             return cb(null, true);
         }
         cb(new Error('Solo se permiten imágenes (jpeg, jpg, png, gif)'));
     }
-}).fields([{ name: 'imagen1', maxCount: 1 }, { name: 'imagen2', maxCount: 1 }]); // Permite subir hasta 2 imágenes con nombres específicos
+}).fields([{ name: 'imagen1', maxCount: 1 }, { name: 'imagen2', maxCount: 1 }]);
 
 
 exports.getAboutInfo = async (req, res, next) => {
     try {
-        const info = await About.getAboutInfo();
+        const info = await About.getAboutInfo(); 
         if (!info) {
-            // Si no hay información, puedes devolver un objeto vacío o valores por defecto
             return res.status(200).json({
                 titulo: 'Barbería',
                 parrafo1: '¡Bienvenido a nuestra barbería!',
@@ -50,84 +35,110 @@ exports.getAboutInfo = async (req, res, next) => {
         res.status(200).json(info);
     } catch (error) {
         console.error('Error al obtener información "Sobre Mí":', error);
-        next(error);
+        next(error); 
     }
 };
 
 
 exports.updateAboutInfo = async (req, res, next) => {
-    upload(req, res, async (err) => {
-        if (err) {
-            console.error('Error al subir archivos:', err);
-            return res.status(400).json({ message: err.message });
-        }
+    try {
+        const { titulo, parrafo1, parrafo2 } = req.body;
+        const imagen1_eliminar = req.body.imagen1_eliminar === 'true';
+        const imagen2_eliminar = req.body.imagen2_eliminar === 'true';
+        const imagen_url1_existente = req.body.imagen_url1_existente || '';
+        const imagen_url2_existente = req.body.imagen_url2_existente || '';
 
-        try {
-            const { titulo, parrafo1, parrafo2 } = req.body;
-            let { imagen_url1_existente, imagen_url2_existente } = req.body; // URLs que ya existen en la BD
+        const currentInfo = await About.getAboutInfo(); 
 
-            // Obtener la información actual para manejar la eliminación de imágenes antiguas
-            const currentInfo = await About.getAboutInfo();
+        const handleImageOperation = async (file, currentDbUrl, existingFrontendUrl, shouldDelete) => {
+            let finalImageUrl = currentDbUrl; 
+            let publicIdToDelete = null;
+            // Define la carpeta de Cloudinary aquí
+            const folder = 'barberia'; 
 
-            // Determinar las URLs de las imágenes
-            let imagen_url1 = imagen_url1_existente || (req.files['imagen1'] ? `uploads/about/${req.files['imagen1'][0].filename}` : '');
-            let imagen_url2 = imagen_url2_existente || (req.files['imagen2'] ? `uploads/about/${req.files['imagen2'][0].filename}` : '');
-
-            // Si se subió una nueva imagen_url1 y ya existía una, eliminar la antigua
-            if (req.files['imagen1'] && currentInfo && currentInfo.imagen_url1 && currentInfo.imagen_url1 !== imagen_url1_existente) {
-                const oldPath = path.join(__dirname, '..', currentInfo.imagen_url1);
-                if (fs.existsSync(oldPath)) {
-                    fs.unlink(oldPath, (err) => {
-                        if (err) console.error('Error al eliminar imagen antigua:', oldPath, err);
-                    });
-                }
-            }
-            // Si se subió una nueva imagen_url2 y ya existía una, eliminar la antigua
-            if (req.files['imagen2'] && currentInfo && currentInfo.imagen_url2 && currentInfo.imagen_url2 !== imagen_url2_existente) {
-                const oldPath = path.join(__dirname, '..', currentInfo.imagen_url2);
-                if (fs.existsSync(oldPath)) {
-                    fs.unlink(oldPath, (err) => {
-                        if (err) console.error('Error al eliminar imagen antigua:', oldPath, err);
-                    });
-                }
-            }
-
-            // Si se envía una URL vacía para una imagen, significa que se quiere eliminar
-            if (imagen_url1_existente === '') {
-                 if (currentInfo && currentInfo.imagen_url1) {
-                    const oldPath = path.join(__dirname, '..', currentInfo.imagen_url1);
-                    if (fs.existsSync(oldPath)) {
-                        fs.unlink(oldPath, (err) => {
-                            if (err) console.error('Error al eliminar imagen:', oldPath, err);
-                        });
+            if (currentDbUrl) {
+                try {
+                    const urlParts = currentDbUrl.split('/');
+                    const uploadIndex = urlParts.indexOf('upload');
+                    if (uploadIndex > -1 && urlParts.length > uploadIndex + 1) {
+                        const pathAfterUpload = urlParts.slice(uploadIndex + 1).join('/');
+                        publicIdToDelete = pathAfterUpload.split('.')[0];
                     }
-                 }
-                 imagen_url1 = ''; // Asegurar que la URL en BD sea vacía
+                } catch (parseError) {
+                    // No loguear advertencias en consola, solo si es estrictamente necesario para el flujo
+                    publicIdToDelete = null; 
+                }
             }
-
-            if (imagen_url2_existente === '') {
-                if (currentInfo && currentInfo.imagen_url2) {
-                    const oldPath = path.join(__dirname, '..', currentInfo.imagen_url2);
-                    if (fs.existsSync(oldPath)) {
-                        fs.unlink(oldPath, (err) => {
-                            if (err) console.error('Error al eliminar imagen:', oldPath, err);
-                        });
+            
+            if (shouldDelete) {
+                if (publicIdToDelete) {
+                    try {
+                        await cloudinary.uploader.destroy(publicIdToDelete);
+                    } catch (destroyError) {
+                        // Considera loguear errores graves si la eliminación es crítica, pero evita spam
                     }
                 }
-                imagen_url2 = ''; // Asegurar que la URL en BD sea vacía
+                finalImageUrl = ''; 
+            } else if (file) {
+                if (!file || !file.buffer) {
+                    // Considera lanzar un error o retornar la URL actual si el archivo no es válido
+                    return currentDbUrl; 
+                }
+                
+                try {
+                    const result = await cloudinary.uploader.upload(`data:${file.mimetype};base64,${file.buffer.toString('base64')}`, {
+                        folder: folder, // <-- ¡Aquí se aplica la carpeta 'barberia'!
+                    });
+                    finalImageUrl = result.secure_url;
+
+                    if (publicIdToDelete && publicIdToDelete !== result.public_id) { 
+                        try {
+                            await cloudinary.uploader.destroy(publicIdToDelete);
+                        } catch (destroyError) {
+                            // Considera loguear errores graves si la eliminación es crítica, pero evita spam
+                        }
+                    }
+                } catch (uploadError) {
+                    console.error('Error al subir la imagen a Cloudinary:', uploadError); // Mantener este log de error crítico
+                    finalImageUrl = currentDbUrl; 
+                }
+            } else {
+                finalImageUrl = existingFrontendUrl || currentDbUrl || ''; 
             }
+            return finalImageUrl;
+        };
 
-            const updated = await About.updateAboutInfo({ titulo, parrafo1, parrafo2, imagen_url1, imagen_url2 });
+        const imagen_url1 = await handleImageOperation(
+            req.files && req.files['imagen1'] ? req.files['imagen1'][0] : null,
+            currentInfo ? currentInfo.imagen_url1 : '', 
+            imagen_url1_existente,
+            imagen1_eliminar
+        );
 
-            if (!updated) {
-                return res.status(500).json({ message: 'No se pudo actualizar la información "Sobre Mí".' });
-            }
+        const imagen_url2 = await handleImageOperation(
+            req.files && req.files['imagen2'] ? req.files['imagen2'][0] : null,
+            currentInfo ? currentInfo.imagen_url2 : '',
+            imagen_url2_existente,
+            imagen2_eliminar
+        );
+        
+        const success = await About.updateAboutInfo({
+            titulo,
+            parrafo1,
+            parrafo2,
+            imagen_url1, 
+            imagen_url2
+        });
 
-            res.status(200).json({ message: 'Información "Sobre Mí" actualizada exitosamente.' });
-
-        } catch (error) {
-            console.error('Error al actualizar información "Sobre Mí":', error);
-            next(error);
+        if (!success) { 
+            return res.status(500).json({ message: 'No se pudo actualizar la información "Sobre Mí".' });
         }
-    });
+
+        const updatedAboutInfo = await About.getAboutInfo();
+        res.status(200).json(updatedAboutInfo); 
+
+    } catch (error) {
+        console.error('Error general al actualizar información "Sobre Mí":', error); // Mantener este log de error general
+        next(error); 
+    }
 };
