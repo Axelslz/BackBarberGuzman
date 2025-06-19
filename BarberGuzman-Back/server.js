@@ -19,11 +19,11 @@ app.use(helmet());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use('/api/auth', express.json(), authRoutes);
-app.use('/api/barberos', express.json(), barberRoutes); 
-app.use('/api/servicios', express.json(), servicioRoutes); 
-app.use('/api/citas', express.json(), citasRoutes);
-app.use('/api/about', aboutRoutes); 
+app.use('/api/auth', authRoutes);
+app.use('/api/barberos', barberRoutes);
+app.use('/api/servicios', servicioRoutes);
+app.use('/api/citas', citasRoutes);
+app.use('/api/about', aboutRoutes);
 
 app.use(errorMiddleware);
 

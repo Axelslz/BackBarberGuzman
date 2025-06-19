@@ -1,7 +1,7 @@
 const Barbero = require('../models/Barbero');
-const Cita = require('../models/Cita'); // Importamos el modelo Cita (¡asegúrate de que exista!)
-const moment = require('moment-timezone'); // Para manejar fechas (¡asegúrate de que esté instalado: npm install moment-timezone!)
-const cloudinary = require('../config/CloudinaryConfig'); // Importar Cloudinary
+const Cita = require('../models/Cita'); 
+const moment = require('moment-timezone'); 
+const cloudinary = require('../config/CloudinaryConfig'); 
 
 
 const getPublicIdFromCloudinaryUrl = (url) => {
