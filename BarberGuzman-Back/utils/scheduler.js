@@ -1,9 +1,8 @@
 const cron = require('node-cron');
-const db = require('../config/db'); // Necesitas tu conexión a la DB
-const Usuario = require('../models/Usuario'); // Necesitas el modelo de Usuario
-const moment = require('moment-timezone'); // Para manejar fechas
+const db = require('../config/db'); 
+const Usuario = require('../models/Usuario'); 
+const moment = require('moment-timezone'); 
 
-// Función para procesar citas completadas
 const processCompletedCitas = async () => {
     console.log('Iniciando procesamiento de citas completadas...');
     const now = moment.tz("America/Mexico_City");
@@ -11,19 +10,11 @@ const processCompletedCitas = async () => {
     const currentTime = now.format('HH:mm:ss');
 
     try {
-        // Encuentra citas que deberían haber terminado y estén 'confirmada' o 'completada'
-        // y aún no se haya actualizado el contador.
-        // Para simplificar, asumimos que si el estado es 'completada', el contador se incrementa.
-        // Si el estado es 'confirmada' y la hora ya pasó, podemos cambiarla a 'completada' y luego sumar.
-        // Para tu requisito, sumaremos si la cita está marcada como 'completada'.
-
-        // Paso 1: Identificar citas que ya pasaron y tienen estado 'confirmada' para marcarlas como 'completada'
-        // Esto es crucial para tu lógica "siempre y cuando no haya cambios".
-        // Podrías tener un estado intermedio como 'finalizada' antes de 'completada' si es más complejo.
+       
         const [citasPorFinalizar] = await db.query(
             `SELECT id, id_cliente FROM citas
              WHERE fecha_cita <= ? AND hora_fin <= ?
-             AND estado = 'confirmada'`, // O 'pendiente', 'agendada', etc.
+             AND estado = 'confirmada'`, 
             [today, currentTime]
         );
 
@@ -35,14 +26,10 @@ const processCompletedCitas = async () => {
             }
         }
 
-        // Paso 2: Contar citas completadas que aún no han sido contadas
-        // Asumimos que hay una forma de marcar que ya se contó, o que el estado 'completada' es final.
-        // Si quieres evitar doble conteo, podrías añadir una columna 'contador_actualizado' boolean en 'citas'.
-        // Por ahora, si una cita está 'completada', la contamos y la marcamos.
         const [citasCompletadasParaContar] = await db.query(
             `SELECT c.id, c.id_cliente
              FROM citas c
-             WHERE c.estado = 'completada' AND c.contador_actualizado = 0` // Necesita la columna 'contador_actualizado' en 'citas'
+             WHERE c.estado = 'completada' AND c.contador_actualizado = 0` 
         );
 
         if (citasCompletadasParaContar.length > 0) {
@@ -62,14 +49,12 @@ const processCompletedCitas = async () => {
     console.log('Procesamiento de citas completadas finalizado.');
 };
 
-// Programa la tarea para que se ejecute cada hora (ej. a los 0 minutos de cada hora)
-// Puedes ajustarlo, ej. '0 0 * * *' para que se ejecute a medianoche todos los días.
 const startScheduler = () => {
-    cron.schedule('0 * * * *', () => { // Ejecuta cada hora en el minuto 0
+    cron.schedule('0 * * * *', () => { 
         processCompletedCitas();
     }, {
         scheduled: true,
-        timezone: "America/Mexico_City" // Asegura la zona horaria correcta
+        timezone: "America/Mexico_City" 
     });
     console.log('Scheduler de citas completadas iniciado.');
 };

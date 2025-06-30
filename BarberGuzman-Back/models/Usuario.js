@@ -9,11 +9,7 @@ class Usuario {
         return { id: result.insertId, name, lastname, correo, role };
     }
 
-    // Nuevo método para crear un usuario que se registra con Google
     static async createGoogleUser({ googleId, name, lastname, correo, profilePicture, role }) {
-        // Para usuarios de Google, el campo 'password' puede ser nulo o un valor predefinido.
-        // Asegúrate de que tu tabla 'usuarios' permita 'password' ser NULL si no habrá contraseña local.
-        // Si no quieres que sea NULL, puedes poner una cadena vacía o un valor marcador como 'GOOGLE_AUTHED'.
         const [result] = await db.query(
             'INSERT INTO usuarios (google_id, name, lastname, correo, password, role, citas_completadas, profile_picture_url) VALUES (?, ?, ?, ?, NULL, ?, 0, ?)',
             [googleId, name, lastname, correo, role, profilePicture]
@@ -50,7 +46,6 @@ class Usuario {
         return rows[0];
     }
 
-    // Nuevo método para actualizar el google_id de un usuario existente
     static async updateGoogleId(id, googleId) {
         const [result] = await db.query(
             'UPDATE usuarios SET google_id = ? WHERE id = ?',
@@ -59,7 +54,6 @@ class Usuario {
         return result.affectedRows > 0;
     }
 
-    // Nuevo método para actualizar perfil de usuario desde Google (nombre, apellido, foto)
     static async updateProfileFromGoogle(id, { name, lastname, profilePicture }) {
         const [result] = await db.query(
             'UPDATE usuarios SET name = ?, lastname = ?, profile_picture_url = ? WHERE id = ?',

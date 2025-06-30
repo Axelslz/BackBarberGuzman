@@ -1,4 +1,3 @@
-// controllers/servicioController.js
 const Servicio = require('../models/Servicio');
 
 exports.getServicios = async (req, res, next) => {
@@ -10,6 +9,3 @@ exports.getServicios = async (req, res, next) => {
         next(error);
     }
 };
-
-// Podrías añadir un controlador para obtener un servicio por ID
-// exports.getServicioById = async (req, res, next) => { ... }

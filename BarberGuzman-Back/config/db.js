@@ -1,4 +1,3 @@
-// config/db.js
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
@@ -34,7 +33,6 @@ async function initializeDatabase() {
         console.log('Tabla "usuarios" verificada/creada exitosamente.');
 
         // 2. SQL para crear la tabla 'barberos' si no existe
-        // Incluye id_usuario y su FOREIGN KEY desde el principio
         const createBarbersTableSql = `
             CREATE TABLE IF NOT EXISTS barberos (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -112,11 +110,6 @@ async function initializeDatabase() {
             console.log('Fila inicial insertada en "about_info".');
         }
 
-        // --- Sentencias ALTER TABLE para añadir columnas EXISTENTES si no las tienen ---
-        // SIN 'IF NOT EXISTS' para compatibilidad con versiones antiguas de MySQL
-        // Esto significa que si la columna ya existe, se producirá un error (ER_DUP_COLUMN)
-        // pero puedes envolverlas en un try-catch para manejarlo si no es crítico.
-
         try {
             await connection.execute(`
                 ALTER TABLE usuarios
@@ -144,10 +137,7 @@ async function initializeDatabase() {
                 console.warn('Advertencia: Error al añadir "id_usuario" a "barberos":', error.message);
             }
         }
-        
-        // Intentar añadir la clave foránea. Esto podría fallar si la columna ya tiene datos
-        // que no tienen un id_usuario correspondiente en la tabla 'usuarios'.
-        // Se recomienda que, si ya tienes datos, primero los asocies manualmente (ver explicación anterior).
+ 
         try {
             await connection.execute(`
                 ALTER TABLE barberos
@@ -156,7 +146,6 @@ async function initializeDatabase() {
             `);
             console.log('Clave foránea "fk_id_usuario_barbero" en "barberos" verificada/añadida.');
         } catch (fkErr) {
-            // ER_DUP_KEY, ER_FK_DUP_KEY, ER_CANT_DROP_FIELD_OR_KEY son códigos comunes cuando la FK ya existe o hay un problema de datos
             if (fkErr.code === 'ER_DUP_KEY' || fkErr.code === 'ER_FK_DUP_KEY' || fkErr.code === 'ER_CANT_DROP_FIELD_OR_KEY' || fkErr.code === 'ER_MULTIPLE_PRI_KEY') {
                 console.log('Clave foránea "fk_id_usuario_barbero" ya existe o no se puede añadir debido a datos existentes (ignorado).');
             } else if (fkErr.code === 'ER_NO_REFERENCED_ROW_2') {

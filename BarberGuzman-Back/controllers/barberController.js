@@ -1,7 +1,7 @@
 const Barbero = require('../models/Barbero');
 const Cita = require('../models/Cita'); 
 const moment = require('moment-timezone'); 
-const cloudinary = require('../config/CloudinaryConfig'); 
+const cloudinary = require('../config/cloudinaryConfig');
 
 
 const getPublicIdFromCloudinaryUrl = (url) => {
@@ -10,7 +10,6 @@ const getPublicIdFromCloudinaryUrl = (url) => {
         const urlParts = url.split('/');
         const uploadIndex = urlParts.indexOf('upload');
         if (uploadIndex > -1 && urlParts.length > uploadIndex + 1) {
-            // El public_id es la parte después de '/upload/' y antes de la extensión
             const pathAfterUpload = urlParts.slice(uploadIndex + 1).join('/');
             return pathAfterUpload.split('.')[0];
         }
@@ -20,8 +19,6 @@ const getPublicIdFromCloudinaryUrl = (url) => {
     return null;
 };
 
-
-// Función existente para obtener todos los barberos (público)
 exports.getBarberos = async (req, res, next) => {
     try {
         const barberos = await Barbero.getAll();
@@ -32,12 +29,9 @@ exports.getBarberos = async (req, res, next) => {
     }
 };
 
-// NUEVAS FUNCIONES PARA EL BARBERO ADMIN (¡asegúrate de que estén exportadas como 'exports.nombreFuncion'!)
-
-// Obtener la agenda del día para el barbero autenticado
-exports.getAgendaDelDiaBarbero = async (req, res, next) => { // <-- ¡AQUÍ DEBE ESTAR EL exports.!
+exports.getAgendaDelDiaBarbero = async (req, res, next) => { 
     try {
-        const id_barbero = req.user.id_barbero; // Obtenemos el id_barbero del token
+        const id_barbero = req.user.id_barbero; 
 
         if (!id_barbero) {
             return res.status(403).json({ message: 'Usuario no asociado a un barbero o token inválido.' });
@@ -53,8 +47,7 @@ exports.getAgendaDelDiaBarbero = async (req, res, next) => { // <-- ¡AQUÍ DEBE
     }
 };
 
-// Obtener la agenda de una fecha específica para el barbero autenticado
-exports.getAgendaPorFechaBarbero = async (req, res, next) => { // <-- ¡AQUÍ DEBE ESTAR EL exports.!
+exports.getAgendaPorFechaBarbero = async (req, res, next) => { 
     try {
         const id_barbero = req.user.id_barbero;
         const { fecha } = req.params;
@@ -75,9 +68,7 @@ exports.getAgendaPorFechaBarbero = async (req, res, next) => { // <-- ¡AQUÍ DE
     }
 };
 
-
-// Obtener el historial de citas por mes/año para el barbero autenticado
-exports.getHistorialBarberoPorMes = async (req, res, next) => { // <-- ¡AQUÍ DEBE ESTAR EL exports.!
+exports.getHistorialBarberoPorMes = async (req, res, next) => { 
     try {
         const id_barbero = req.user.id_barbero;
         const { year, month } = req.params;
@@ -101,8 +92,7 @@ exports.getHistorialBarberoPorMes = async (req, res, next) => { // <-- ¡AQUÍ D
     }
 };
 
-// Obtener el historial de citas por año para el barbero autenticado
-exports.getHistorialBarberoPorAño = async (req, res, next) => { // <-- ¡AQUÍ DEBE ESTAR EL exports.!
+exports.getHistorialBarberoPorAño = async (req, res, next) => { 
     try {
         const id_barbero = req.user.id_barbero;
         const { year } = req.params;
@@ -140,22 +130,20 @@ exports.getBarberoById = async (req, res, next) => {
     }
 };
 
-// *** Asegúrate de que esta función también esté en tu archivo y correctamente exportada ***
 exports.updateBarbero = async (req, res, next) => {
     const { id } = req.params;
-    const { nombre, apellido, especialidad, descripcion, clear_foto_perfil } = req.body; // Incluimos clear_foto_perfil del body
+    const { nombre, apellido, especialidad, descripcion, clear_foto_perfil } = req.body; 
 
     try {
-        const currentBarbero = await Barbero.getById(id); // Obtener la información actual del barbero para la URL de la foto
+        const currentBarbero = await Barbero.getById(id); 
         if (!currentBarbero) {
             return res.status(404).json({ message: 'Barbero no encontrado.' });
         }
 
-        let foto_perfil_url = currentBarbero.foto_perfil_url || ''; // URL actual del barbero
+        let foto_perfil_url = currentBarbero.foto_perfil_url || ''; 
         let publicIdToDelete = getPublicIdFromCloudinaryUrl(currentBarbero.foto_perfil_url);
 
-        // Lógica para manejar la foto de perfil
-        if (clear_foto_perfil === 'true') { // Si se marcó para eliminar
+        if (clear_foto_perfil === 'true') { 
             if (publicIdToDelete) {
                 try {
                     await cloudinary.uploader.destroy(publicIdToDelete);
@@ -163,9 +151,8 @@ exports.updateBarbero = async (req, res, next) => {
                     console.warn('Advertencia: No se pudo eliminar la imagen antigua de Cloudinary:', destroyError.message);
                 }
             }
-            foto_perfil_url = ''; // Establecer URL a vacía
-        } else if (req.file) { // Si se sube un nuevo archivo
-            // Eliminar la imagen antigua si existe y no es la que se acaba de subir (esto es redundante con Cloudinary, pero útil si cambias la lógica)
+            foto_perfil_url = ''; 
+        } else if (req.file) { 
             if (publicIdToDelete) {
                 try {
                     await cloudinary.uploader.destroy(publicIdToDelete);
@@ -174,24 +161,19 @@ exports.updateBarbero = async (req, res, next) => {
                 }
             }
 
-            // Subir la nueva imagen a Cloudinary desde el buffer
             const result = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`, {
-                folder: 'barber_profiles', // Carpeta en Cloudinary, la misma que usabas
-                public_id: `barber-${id}-${Date.now()}` // Puedes generar un public_id más robusto si quieres
+                folder: 'barber_profiles', 
+                public_id: `barber-${id}-${Date.now()}` 
             });
             foto_perfil_url = result.secure_url;
         }
-        // Si no hay req.file y no se pidió clear_foto_perfil, la foto_perfil_url mantiene su valor original.
 
         const updated = await Barbero.updateBarbero(id, {
-            // Nombre y Apellido se mantendrán como readonly en el frontend,
-            // pero el backend debería poder manejarlos si se envían (o ignorarlos si no se espera cambio)
-            // Aquí los incluimos para que la función de la DB los use si están presentes
-            nombre: currentBarbero.nombre, // Mantener nombre
-            apellido: currentBarbero.apellido, // Mantener apellido
+            nombre: currentBarbero.nombre, 
+            apellido: currentBarbero.apellido, 
             especialidad,
             foto_perfil_url,
-            descripcion // Incluir la descripción
+            descripcion 
         });
 
         if (updated) {
@@ -201,8 +183,6 @@ exports.updateBarbero = async (req, res, next) => {
         }
     } catch (error) {
         console.error('Error al actualizar barbero:', error);
-        // Puedes añadir más detalles de error aquí si es un error de Cloudinary, etc.
-        // if (error.http_code) { ... }
-        next(error); // Pasa el error al siguiente middleware de manejo de errores
+        next(error); 
     }
 };

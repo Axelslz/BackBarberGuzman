@@ -1,20 +1,28 @@
-const db = require('../config/db');
+const db = require('../config/db'); 
 
 class Cita {
-   static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos }) { // <-- Aceptar hora_fin
+    static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos }) {
         const [result] = await db.query(
-            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, contador_actualizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)', // <-- Agregar hora_fin al INSERT y un '?'
-            [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente'] // <-- Agregar hora_fin a los valores
+            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente']
         );
-        return { id: result.insertId, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente' }; // <-- Incluirlo en el retorno
+        return { id: result.insertId, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0 };
     }
 
-    static async getCitasByBarberoAndDate(id_barbero, fecha_cita) {
-        const [rows] = await db.query(
-            'SELECT * FROM citas WHERE id_barbero = ? AND fecha_cita = ? AND estado NOT IN ("cancelada", "completada")',
-            [id_barbero, fecha_cita]
-        );
-        return rows;
+    static async getCitasByBarberoAndDate(idBarbero, fecha) {
+        try {
+            const [rows] = await db.query(
+                `SELECT c.*, u.name as cliente_name, u.lastname as cliente_lastname
+                 FROM citas c
+                 JOIN usuarios u ON c.id_cliente = u.id
+                 WHERE c.id_barbero = ? AND c.fecha_cita = ? AND c.estado NOT IN ("cancelada", "completada")`,
+                [idBarbero, fecha]
+            );
+            return rows;
+        } catch (error) {
+            console.error('Error al obtener citas por barbero y fecha:', error);
+            throw error;
+        }
     }
 
     static async getById(id) {
@@ -22,8 +30,23 @@ class Cita {
         return rows[0];
     }
 
+    static async update(id, data) { 
+        const fields = Object.keys(data).map(key => `${key} = ?`).join(', ');
+        const values = Object.values(data);
+        values.push(id); 
+
+        const [result] = await db.query(`UPDATE citas SET ${fields} WHERE id = ?`, values);
+        return result.affectedRows > 0;
+    }
+
+
     static async actualizarEstado(id, nuevoEstado) {
         const [result] = await db.query('UPDATE citas SET estado = ? WHERE id = ?', [nuevoEstado, id]);
+        return result.affectedRows > 0;
+    }
+
+    static async cancelarCita(id_cita) {
+        const [result] = await db.query('UPDATE citas SET estado = "cancelada" WHERE id = ?', [id_cita]);
         return result.affectedRows > 0;
     }
 
@@ -66,33 +89,19 @@ class Cita {
         return rows;
     }
 
-    static async getAllAppointments(startDate = null, endDate = null) {
-        let whereClause = '';
-        let params = [];
-        if (startDate && endDate) {
-            whereClause = 'WHERE c.fecha_cita BETWEEN ? AND ?';
-            params = [startDate, endDate];
-        }
-        return this.getAppointments(whereClause, params);
+    static async getAll() { 
+        return this.getAppointments('', []);
     }
 
-    static async getAppointmentsByUserId(userId, startDate = null, endDate = null) {
+    static async getAppointmentsByUserId(userId) { 
         let whereClause = 'WHERE c.id_cliente = ?';
         let params = [userId];
-        if (startDate && endDate) {
-            whereClause += ' AND c.fecha_cita BETWEEN ? AND ?';
-            params.push(startDate, endDate);
-        }
         return this.getAppointments(whereClause, params);
     }
 
-    static async getAppointmentsByBarberId(barberId, startDate = null, endDate = null) {
+    static async getAppointmentsByBarberId(barberId) { 
         let whereClause = 'WHERE c.id_barbero = ?';
         let params = [barberId];
-        if (startDate && endDate) {
-            whereClause += ' AND c.fecha_cita BETWEEN ? AND ?';
-            params.push(startDate, endDate);
-        }
         return this.getAppointments(whereClause, params);
     }
 }
