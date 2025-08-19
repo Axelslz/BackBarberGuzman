@@ -45,6 +45,37 @@ class Usuario {
         `, [id]);
         return rows[0];
     }
+    
+    // Nuevo método para actualizar el perfil del usuario
+    static async updateProfile(id, data) {
+      let query = 'UPDATE usuarios SET ';
+      const values = [];
+      const fields = [];
+
+      if (data.name) {
+        fields.push('name = ?');
+        values.push(data.name);
+      }
+      if (data.lastname) {
+        fields.push('lastname = ?');
+        values.push(data.lastname);
+      }
+      if (data.correo) {
+        fields.push('correo = ?');
+        values.push(data.correo);
+      }
+      if (data.profilePictureUrl) { // Nuevo campo para la URL de la foto de perfil
+        fields.push('profile_picture_url = ?');
+        values.push(data.profilePictureUrl);
+      }
+      
+      query += fields.join(', ');
+      query += ' WHERE id = ?';
+      values.push(id);
+      
+      const [result] = await db.query(query, values);
+      return result.affectedRows > 0;
+    }
 
     static async updateGoogleId(id, googleId) {
         const [result] = await db.query(

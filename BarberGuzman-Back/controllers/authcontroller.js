@@ -2,31 +2,26 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const Usuario = require('../models/Usuario');
-const Barbero = require('../models/Barbero'); // Asegúrate de que el modelo Barbero se importe correctamente
+const Barbero = require('../models/Barbero'); 
 const emailSender = require('../utils/emailSender');
 const { OAuth2Client } = require('google-auth-library');
-
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Función auxiliar para obtener id_barbero, usada en varios lugares
 const getBarberoIdForUser = async (userId, userRole) => {
     let barberoId = null;
-    // Solo si el rol es 'barber', 'admin' o 'super_admin' buscamos un id_barbero asociado
+    
     if (['barber', 'admin', 'super_admin'].includes(userRole)) {
         const barbero = await Barbero.getByUserId(userId);
         if (barbero) {
             barberoId = barbero.id;
         } else {
-            // Esto es un console.warn si un admin/super_admin no tiene perfil de barbero
-            // Es informativo, no un error que deba detener la ejecución
-            if (userRole !== 'barber') { // Solo advertir si no es un rol de barbero primario
+            if (userRole !== 'barber') { 
                 console.warn(`Usuario ${userRole} (ID: ${userId}) no tiene un registro de barbero asociado.`);
             }
         }
     }
     return barberoId;
 };
-
 
 exports.registrar = async (req, res, next) => {
     try {
@@ -37,7 +32,7 @@ exports.registrar = async (req, res, next) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userRole = 'cliente'; // Por defecto, se registra como cliente
+        const userRole = 'cliente'; 
 
         const newUser = await Usuario.create({
             name,
@@ -47,7 +42,6 @@ exports.registrar = async (req, res, next) => {
             role: userRole
         });
 
-        // Al registrar un nuevo cliente, no hay id_barbero asociado.
         const token = jwt.sign({ id: newUser.id, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
         res.status(201).json({
@@ -79,17 +73,16 @@ exports.login = async (req, res, next) => {
             return res.status(400).json({ message: 'Credenciales inválidas.' });
         }
 
-        // --- INICIO DE LA CORRECCIÓN CRÍTICA ---
         const id_barbero = await getBarberoIdForUser(user.id, user.role);
 
         const payload = {
             id: user.id,
             role: user.role,
-            name: user.name, // Añadimos name y lastname al payload
-            lastname: user.lastname, // para que esten disponibles en req.user
-            ...(id_barbero && { id_barbero: id_barbero }) // Solo añade si id_barbero no es null
+            name: user.name, 
+            lastname: user.lastname,
+            ...(id_barbero && { id_barbero: id_barbero }) 
         };
-        // --- FIN DE LA CORRECCIÓN CRÍTICA ---
+        
 
         const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
@@ -102,8 +95,8 @@ exports.login = async (req, res, next) => {
                 lastname: user.lastname,
                 correo: user.correo,
                 role: user.role,
-                citas_completadas: user.citas_completadas || 0, // Asegúrate de que este campo exista en tu modelo Usuario si lo quieres aquí
-                ...(id_barbero && { id_barbero: id_barbero }) // Solo añade si id_barbero no es null
+                citas_completadas: user.citas_completadas || 0, 
+                ...(id_barbero && { id_barbero: id_barbero }) 
             }
         });
 
@@ -129,7 +122,7 @@ exports.googleLogin = async (req, res, next) => {
         const { sub: googleId, email, name, given_name, family_name, picture } = payload;
 
         let user = await Usuario.findByCorreo(email);
-        let isNewUser = false; // Bandera para saber si es un nuevo usuario
+        let isNewUser = false; 
 
         if (!user) {
             console.log(`Usuario con correo ${email} no encontrado, creando nuevo registro.`);
@@ -142,7 +135,7 @@ exports.googleLogin = async (req, res, next) => {
                 lastname: lastName,
                 correo: email,
                 profilePicture: picture,
-                role: 'cliente' // Los usuarios de Google por defecto son clientes
+                role: 'cliente' 
             });
             isNewUser = true;
             console.log(`Nuevo usuario de Google creado: ${user.correo}`);
@@ -151,22 +144,19 @@ exports.googleLogin = async (req, res, next) => {
                 await Usuario.updateGoogleId(user.id, googleId);
                 console.log(`Usuario existente ${user.correo} asociado con Google ID.`);
             }
-            // Actualizar datos del perfil con info más reciente de Google
             await Usuario.updateProfileFromGoogle(user.id, {
                 name: given_name || name.split(' ')[0],
                 lastname: family_name || name.split(' ').slice(1).join(' '),
                 profilePicture: picture
             });
 
-            // Si es un usuario existente pero no tiene contraseña local, sigue siendo considerado para "establecer contraseña"
             if (!user.password) {
-                isNewUser = true; // Forzar redirección para establecer contraseña
+                isNewUser = true; 
                 console.log(`Usuario existente ${user.correo} sin contraseña local, se redirigirá para establecer una.`);
             }
         }
 
         if (isNewUser) {
-            // Genera un token temporal para establecer la contraseña
             const setupToken = jwt.sign({ id: user.id, purpose: 'setup_password' }, process.env.JWT_SECRET, { expiresIn: '15m' });
             return res.status(200).json({
                 message: 'Usuario registrado con Google. Por favor, configura tu contraseña.',
@@ -181,9 +171,7 @@ exports.googleLogin = async (req, res, next) => {
                 redirectRequired: true
             });
         } else {
-            // --- INICIO DE LA CORRECCIÓN CRÍTICA para usuarios de Google existentes ---
-            // Si es un usuario existente con contraseña local, procede con el login normal
-            // Necesitamos obtener el perfil completo de la DB para asegurarnos de tener el rol actual
+            
             const userProfile = await Usuario.findById(user.id);
 
             const id_barbero = await getBarberoIdForUser(userProfile.id, userProfile.role);
@@ -191,7 +179,7 @@ exports.googleLogin = async (req, res, next) => {
             const appPayload = {
                 id: userProfile.id,
                 role: userProfile.role,
-                name: userProfile.name, // Añadimos name y lastname al payload
+                name: userProfile.name, 
                 lastname: userProfile.lastname,
                 ...(id_barbero && { id_barbero: id_barbero })
             };
@@ -211,7 +199,6 @@ exports.googleLogin = async (req, res, next) => {
                 },
                 redirectRequired: false
             });
-            // --- FIN DE LA CORRECCIÓN CRÍTICA ---
         }
 
     } catch (error) {
@@ -225,7 +212,6 @@ exports.googleLogin = async (req, res, next) => {
     }
 };
 
-// NUEVA FUNCIÓN PARA ESTABLECER LA CONTRASEÑA INICIAL
 exports.setPassword = async (req, res, next) => {
     try {
         const { setupToken, newPassword } = req.body;
@@ -253,14 +239,12 @@ exports.setPassword = async (req, res, next) => {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await Usuario.updatePassword(user.id, hashedPassword);
 
-        // --- INICIO DE LA CORRECCIÓN CRÍTICA ---
-        // Una vez establecida la contraseña, genera un JWT normal para el usuario
         const id_barbero = await getBarberoIdForUser(user.id, user.role);
 
         const appPayload = {
             id: user.id,
             role: user.role,
-            name: user.name, // Añadimos name y lastname al payload
+            name: user.name, 
             lastname: user.lastname,
             ...(id_barbero && { id_barbero: id_barbero })
         };
@@ -279,7 +263,6 @@ exports.setPassword = async (req, res, next) => {
                 ...(id_barbero && { id_barbero: id_barbero })
             }
         });
-        // --- FIN DE LA CORRECCIÓN CRÍTICA ---
 
     } catch (error) {
         console.error('Error al establecer la contraseña:', error);
@@ -287,30 +270,71 @@ exports.setPassword = async (req, res, next) => {
     }
 };
 
+// Nueva función para actualizar el perfil del usuario
+exports.updateUserProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    // Cambia 'lastname' a 'lastName' y 'correo' a 'email'
+    const { name, lastname, email } = req.body;
+    
+    // Obtiene la URL de la imagen de Cloudinary si existe
+    const profilePictureUrl = req.file ? req.file.path : null;
+
+    // Actualiza los datos para usar las nuevas claves
+    const updateData = {
+      name,
+      lastname,
+      email,
+      profilePictureUrl
+    };
+
+    const updated = await Usuario.updateProfile(userId, updateData);
+
+    if (updated) {
+      // Obtener el perfil completo y actualizado para enviarlo al frontend
+      const updatedUser = await Usuario.findById(userId);
+      const id_barbero = await getBarberoIdForUser(updatedUser.id, updatedUser.role);
+
+      res.status(200).json({
+        message: 'Perfil actualizado con éxito',
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          lastname: updatedUser.lastname,
+          correo: updatedUser.correo,
+          role: updatedUser.role,
+          citas_completadas: updatedUser.citas_completadas || 0,
+          profileImage: updatedUser.profile_picture_url,
+          ...(id_barbero && { id_barbero: id_barbero })
+        },
+      });
+    } else {
+      res.status(404).json({ message: 'Usuario no encontrado o no se pudo actualizar.' });
+    }
+
+  } catch (error) {
+    console.error('Error al actualizar el perfil:', error);
+    next(error);
+  }
+};
 
 exports.getMe = async (req, res, next) => {
     try {
-        // En este punto, req.user ya viene del JWT decodificado por authenticateToken
-        // que ya incluye id_barbero si se seteó al login.
-        // Solo necesitamos buscar el usuario completo de la DB para otros detalles.
+        
         const user = await Usuario.findById(req.user.id);
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
-        // El id_barbero ya debería estar en req.user si el token fue generado correctamente.
-        // Pero para asegurar que los datos del barbero (ej. especialidad) estén completos
-        // si el usuario es un barbero/admin con perfil de barbero, los obtenemos de nuevo.
         let barberoInfo = null;
-        if (req.user.id_barbero) { // Si el token ya tenía id_barbero
+        if (req.user.id_barbero) { 
              barberoInfo = await Barbero.getById(req.user.id_barbero);
-        } else { // Si no lo tenía, pero el rol es uno que podría tenerlo
-            barberoInfo = await getBarberoIdForUser(user.id, user.role); // Usamos la función auxiliar
+        } else { 
+            barberoInfo = await getBarberoIdForUser(user.id, user.role); 
             if (barberoInfo) {
-                barberoInfo = await Barbero.getById(barberoInfo); // Obtener el objeto completo del barbero
+                barberoInfo = await Barbero.getById(barberoInfo); 
             }
         }
-
 
         res.status(200).json({
             user: {
@@ -320,7 +344,7 @@ exports.getMe = async (req, res, next) => {
                 correo: user.correo,
                 role: user.role,
                 citas_completadas: user.citas_completadas || 0,
-                // Si barberoInfo existe, adjuntamos su ID y especialidad
+                profileImage: user.profile_picture_url,
                 ...(barberoInfo && { id_barbero: barberoInfo.id, especialidad: barberoInfo.especialidad })
             }
         });
@@ -330,11 +354,8 @@ exports.getMe = async (req, res, next) => {
     }
 };
 
-// *** NUEVOS CONTROLADORES PARA SUPER_ADMIN ***
-
 exports.getAllUsers = async (req, res, next) => {
     try {
-        // Solo super_admin puede acceder a esta ruta (autorizado por middleware)
         const users = await Usuario.getAllUsersWithBarberInfo();
         res.status(200).json(users);
     } catch (error) {
@@ -345,8 +366,8 @@ exports.getAllUsers = async (req, res, next) => {
 
 exports.updateUserRole = async (req, res, next) => {
     try {
-        const { id } = req.params; // ID del usuario a actualizar
-        const { newRole, especialidad } = req.body; // 'especialidad' solo es necesaria si newRole es 'admin' o 'barber'
+        const { id } = req.params; 
+        const { newRole, especialidad } = req.body; 
 
         if (!newRole) {
             return res.status(400).json({ message: 'El nuevo rol es obligatorio.' });
@@ -381,15 +402,11 @@ exports.updateUserRole = async (req, res, next) => {
         } else if (isChangingFromAdminOrBarber) {
             const existingBarbero = await Barbero.getByUserId(id);
             if (existingBarbero) {
-                // Considera si realmente quieres ELIMINAR el registro de barbero.
-                // A veces, solo se "desactiva" o se mantiene por historial.
-                // Por ahora, lo eliminamos como tu código original.
                 await Barbero.deleteBarbero(existingBarbero.id);
                 message += ' Registro de barbero eliminado.';
             }
         }
 
-        // Actualizar el rol en la tabla de usuarios
         await Usuario.updateRole(id, newRole);
 
         res.status(200).json({ message: message });
@@ -399,8 +416,6 @@ exports.updateUserRole = async (req, res, next) => {
         next(error);
     }
 };
-
-// --- NUEVAS FUNCIONES PARA EL RESTABLECIMIENTO DE CONTRASEÑA ---
 
 exports.forgotPassword = async (req, res, next) => {
     try {
@@ -469,3 +484,5 @@ exports.resetPassword = async (req, res, next) => {
         next(error);
     }
 };
+
+

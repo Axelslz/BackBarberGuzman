@@ -6,13 +6,13 @@ const moment = require('moment');
 require('moment/locale/es');
 
 const WORK_HOURS = {
-    'lunes': { start: '10:00', end: '20:00' },
-    'martes': { start: '10:00', end: '20:00' },
-    'miércoles': { start: '10:00', end: '20:00' },
-    'jueves': { start: '10:00', end: '20:00' },
-    'viernes': { start: '10:00', end: '20:00' },
-    'sábado': { start: '10:00', end: '17:00' },
-    'domingo': { start: '10:00', end: '13:00' },
+    'lunes': { start: '10:00', end: '21:00' },
+    'martes': { start: '10:00', end: '21:00' },
+    'miércoles': { start: '10:00', end: '21:00' },
+    'jueves': { start: '10:00', end: '21:00' },
+    'viernes': { start: '10:00', end: '21:00' },
+    'sábado': { start: '09:00', end: '19:00' },
+    'domingo': { start: '09:00', end: '17:00' },
 };
 
 function generateTimeSlots(start, end, intervalMinutes = 60) {
@@ -219,7 +219,6 @@ exports.unblockTimeForBarber = async (req, res, next) => {
     }
 };
 
-// Nueva función en el controlador para cancelar una cita
 exports.cancelarCita = async (req, res, next) => {
     try {
         const { idCita } = req.params;
@@ -230,10 +229,8 @@ exports.cancelarCita = async (req, res, next) => {
             return res.status(404).json({ message: 'Cita no encontrada.' });
         }
 
-        // Obtener el barbero asociado a la cita para validar permisos
         const barberoDeCita = await Barbero.getById(cita.id_barbero);
 
-        // Permisos: Solo el admin, super_admin o el propio barbero de la cita pueden cancelarla
         if (!['admin', 'super_admin'].includes(role)) {
             if (role === 'barber' && userBarberoId.toString() !== barberoDeCita.id.toString()) {
                 return res.status(403).json({ message: 'No tienes permiso para cancelar citas de otros barberos.' });
@@ -264,7 +261,7 @@ exports.crearCita = async (req, res, next) => {
         console.log('Contenido de req.body en crearCita:', req.body); // Agrega esta línea
         console.log('Contenido de req.user en crearCita:', req.user);
         
-        const { id_barbero, fecha_cita, hora_inicio, id_servicio, id_cliente } = req.body;
+        const { id_barbero, fecha_cita, hora_inicio, id_servicio, id_cliente, nombre_cliente } = req.body;
 
         if (!id_barbero || !fecha_cita || !hora_inicio || !id_servicio || !id_cliente) {
             return res.status(400).json({ message: 'Faltan datos obligatorios para crear la cita.' });
@@ -338,7 +335,8 @@ exports.crearCita = async (req, res, next) => {
             fecha_cita,
             hora_inicio: requestedStartTime.format('HH:mm:ss'),
             hora_fin: hora_fin,
-            duracion_minutos
+            duracion_minutos,
+            nombre_cliente
         });
 
         res.status(201).json({
@@ -361,9 +359,9 @@ exports.getHistorialCitas = async (req, res, next) => {
         let citas;
 
         if (role === 'cliente') {
-            citas = await Cita.getAppointmentsByUserId(userId); // Cambiado a getAppointmentsByUserId
+            citas = await Cita.getAppointmentsByUserId(userId); 
         } else if (role === 'barber') {
-            citas = await Cita.getAppointmentsByBarberId(userBarberId); // Cambiado a getAppointmentsByBarberId
+            citas = await Cita.getAppointmentsByBarberId(userBarberId); 
         } else if (role === 'admin' || role === 'super_admin') {
             citas = await Cita.getAll();
         } else {
@@ -383,7 +381,6 @@ exports.actualizarCita = async (req, res, next) => {
         const { id } = req.params;
         const { nuevoEstado } = req.body;
 
-        // **IMPORTANTE:** Validación para asegurar que nuevoEstado no sea nulo o indefinido
         if (!nuevoEstado) {
             return res.status(400).json({ message: 'El nuevo estado de la cita no puede ser nulo o vacío.' });
         }
@@ -419,7 +416,7 @@ exports.getCitasByUserId = async (req, res, next) => {
             return res.status(403).json({ message: 'No tienes permiso para ver las citas de otros usuarios.' });
         }
 
-        const citas = await Cita.getAppointmentsByUserId(userId); // Se cambió a la función correcta
+        const citas = await Cita.getAppointmentsByUserId(userId); 
         res.status(200).json(citas);
     } catch (error) {
         console.error('Error al obtener citas por ID de usuario:', error);
@@ -436,7 +433,7 @@ exports.getCitasByBarberId = async (req, res, next) => {
             return res.status(403).json({ message: 'No tienes permiso para ver las citas de otros barberos.' });
         }
 
-        const citas = await Cita.getAppointmentsByBarberId(barberId); // Se cambió a la función correcta
+        const citas = await Cita.getAppointmentsByBarberId(barberId); 
         res.status(200).json(citas);
     } catch (error) {
         console.error('Error al obtener citas por ID de barbero:', error);

@@ -1,7 +1,8 @@
 const cron = require('node-cron');
-const db = require('../config/db'); 
-const Usuario = require('../models/Usuario'); 
-const moment = require('moment-timezone'); 
+const db = require('../config/db');
+const Usuario = require('../models/Usuario');
+const moment = require('moment-timezone');
+const { sendWhatsappMessage } = require('./whatsappSender'); 
 
 const processCompletedCitas = async () => {
     console.log('Iniciando procesamiento de citas completadas...');
@@ -10,11 +11,10 @@ const processCompletedCitas = async () => {
     const currentTime = now.format('HH:mm:ss');
 
     try {
-       
         const [citasPorFinalizar] = await db.query(
             `SELECT id, id_cliente FROM citas
              WHERE fecha_cita <= ? AND hora_fin <= ?
-             AND estado = 'confirmada'`, 
+             AND estado = 'confirmada'`,
             [today, currentTime]
         );
 
@@ -29,7 +29,7 @@ const processCompletedCitas = async () => {
         const [citasCompletadasParaContar] = await db.query(
             `SELECT c.id, c.id_cliente
              FROM citas c
-             WHERE c.estado = 'completada' AND c.contador_actualizado = 0` 
+             WHERE c.estado = 'completada' AND c.contador_actualizado = 0`
         );
 
         if (citasCompletadasParaContar.length > 0) {
@@ -49,14 +49,60 @@ const processCompletedCitas = async () => {
     console.log('Procesamiento de citas completadas finalizado.');
 };
 
+const sendAppointmentReminders = async () => {
+    console.log('Iniciando envío de recordatorios de citas...');
+    const now = moment.tz("America/Mexico_City");
+    const tomorrow = now.clone().add(1, 'day').startOf('day'); 
+    const endOfTomorrow = tomorrow.clone().endOf('day');
+
+    try {
+        
+        const [citasDeManana] = await db.query(
+            `SELECT id_cliente, fecha_cita
+             FROM citas
+             WHERE fecha_cita >= ? AND fecha_cita <= ? AND estado = 'confirmada'`,
+            [tomorrow.format('YYYY-MM-DD'), endOfTomorrow.format('YYYY-MM-DD')]
+        );
+
+        if (citasDeManana.length > 0) {
+            console.log(`Citas de mañana encontradas: ${citasDeManana.length}`);
+            for (const cita of citasDeManana) {
+                
+                const [usuarioResult] = await db.query('SELECT name, telefono FROM usuarios WHERE id = ?', [cita.id_cliente]);
+                const usuario = usuarioResult[0];
+
+                if (usuario && usuario.telefono) {
+                    const horaCita = moment(cita.fecha_cita).tz("America/Mexico_City").format('hh:mm A');
+                    const mensaje = `💈 ¡Hola ${usuario.name}! Este es un recordatorio de tu corte de cabello en BarberGuzman programado para mañana a las ${horaCita}. ¡Te esperamos! ✨`;
+                    await sendWhatsappMessage(usuario.telefono, mensaje);
+                }
+            }
+        } else {
+            console.log('No hay citas para mañana para enviar recordatorios.');
+        }
+    } catch (error) {
+        console.error('Error al enviar recordatorios de citas:', error);
+    }
+    console.log('Envío de recordatorios finalizado.');
+};
+
 const startScheduler = () => {
-    cron.schedule('0 * * * *', () => { 
+    
+    cron.schedule('0 8 * * *', () => {
+        sendAppointmentReminders();
+    }, {
+        scheduled: true,
+        timezone: "America/Mexico_City"
+    });
+
+    cron.schedule('0 * * * *', () => {
         processCompletedCitas();
     }, {
         scheduled: true,
-        timezone: "America/Mexico_City" 
+        timezone: "America/Mexico_City"
     });
-    console.log('Scheduler de citas completadas iniciado.');
+
+    console.log('Scheduler de citas iniciado.');
 };
 
 module.exports = { startScheduler };

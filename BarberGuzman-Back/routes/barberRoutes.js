@@ -3,7 +3,7 @@ const router = express.Router();
 const barberController = require('../controllers/barberController');
 const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware'); 
 const { permitirRoles } = require('../middlewares/roleMiddleware'); 
-const upload = require('../middlewares/uploadMiddleware');
+const { uploadBarberPhoto } = require('../middlewares/uploadMiddleware'); // <-- CAMBIO: Importa la función específica
 
 router.get('/', barberController.getBarberos);
 
@@ -11,7 +11,7 @@ router.put(
     '/:id',
     authenticateToken,
     permitirRoles('admin', 'super_admin'),
-    upload, 
+    uploadBarberPhoto, 
     barberController.updateBarbero
 );
 

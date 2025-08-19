@@ -17,21 +17,14 @@ const {
 } = require('../controllers/citasController');
 
 router.get('/disponibilidad', getDisponibilidadBarbero);
-
-router.post('/', authenticateToken, authorizeRole(['cliente', 'admin']), crearCita);
-
+router.post('/', authenticateToken, authorizeRole(['cliente', 'admin', 'super_admin']), crearCita);
 router.get('/', authenticateToken, authorizeRole(['cliente', 'admin', 'super_admin', 'barber']), getHistorialCitas);
-
 router.put('/:id', authenticateToken, authorizeRole(['admin', 'super_admin']), actualizarCita);
-
 router.put('/:idCita/cancelar', authenticateToken, authorizeRole(['admin', 'super_admin', 'barber']), cancelarCita);
-
 router.post('/block-time', authenticateToken, authorizeRole(['admin', 'super_admin', 'barber']), blockTimeForBarber);
-
 router.delete('/unblock-time/:id', authenticateToken, authorizeRole(['admin', 'super_admin', 'barber']), unblockTimeForBarber);
-
 router.get('/all', authenticateToken, authorizeRole(['admin', 'super_admin']), getAllCitas);
-router.get('/user/:userId', authenticateToken, authorizeRole(['cliente', 'admin', 'super_admin']), getCitasByUserId); // Cliente puede ver las suyas, Admin/SuperAdmin todas
-router.get('/barber/:barberId', authenticateToken, authorizeRole(['admin', 'super_admin', 'barber']), getCitasByBarberId); // Barbero puede ver las suyas, Admin/SuperAdmin todas
+router.get('/user/:userId', authenticateToken, authorizeRole(['cliente', 'admin', 'super_admin']), getCitasByUserId); 
+router.get('/barber/:barberId', authenticateToken, authorizeRole(['admin', 'super_admin', 'barber']), getCitasByBarberId); 
 
 module.exports = router;

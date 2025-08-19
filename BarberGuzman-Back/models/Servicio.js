@@ -3,7 +3,7 @@ const db = require('../config/db');
 class Servicio {
     static async getAll() {
         const [servicios] = await db.query('SELECT id, nombre, descripcion, precio, duracion_minutos, tipo FROM servicios ORDER BY precio ASC');
-        return servicios;
+        return servicios;    
     }
 
     static async getById(id) {

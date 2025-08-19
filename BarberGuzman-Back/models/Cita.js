@@ -1,12 +1,12 @@
 const db = require('../config/db'); 
 
 class Cita {
-    static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos }) {
+    static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
         const [result] = await db.query(
-            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente']
+            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente', nombre_cliente]
         );
-        return { id: result.insertId, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0 };
+        return { id: result.insertId, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0, nombre_cliente };
     }
 
     static async getCitasByBarberoAndDate(idBarbero, fecha) {
@@ -72,6 +72,7 @@ class Cita {
                 c.id_cliente,
                 c.id_barbero,
                 c.id_servicio,
+                COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname)) AS cliente_nombre,
                 u_cliente.name AS cliente_name,
                 u_cliente.lastname AS cliente_lastname,
                 u_barbero.name AS barbero_name,

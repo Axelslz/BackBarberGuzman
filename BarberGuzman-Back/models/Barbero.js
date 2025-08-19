@@ -93,7 +93,6 @@ class Barbero {
         return { id: result.insertId, id_barbero, fecha, hora_inicio, hora_fin, motivo };
     }
 
-    // Nuevo método para obtener horarios no disponibles para un barbero y fecha
     static async getUnavailableTimesByBarberoAndDate(id_barbero, fecha) {
         const [rows] = await db.query(
             'SELECT * FROM horarios_no_disponibles_barberos WHERE id_barbero = ? AND fecha = ?',
@@ -102,7 +101,6 @@ class Barbero {
         return rows;
     }
 
-    // Nuevo método para eliminar un horario no disponible (para permitir editar)
     static async deleteUnavailableTime(id) {
         const [result] = await db.query(
             'DELETE FROM horarios_no_disponibles_barberos WHERE id = ?',
@@ -111,7 +109,6 @@ class Barbero {
         return result.affectedRows > 0;
     }
 
-    // Nuevo método para obtener un horario no disponible por su ID (usado para verificar permisos al desbloquear)
     static async getUnavailableTimeById(id) {
         const [rows] = await db.query('SELECT * FROM horarios_no_disponibles_barberos WHERE id = ?', [id]);
         return rows[0];

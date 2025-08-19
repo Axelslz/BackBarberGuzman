@@ -143,6 +143,7 @@ exports.updateBarbero = async (req, res, next) => {
         let foto_perfil_url = currentBarbero.foto_perfil_url || ''; 
         let publicIdToDelete = getPublicIdFromCloudinaryUrl(currentBarbero.foto_perfil_url);
 
+        // Si se pide borrar la foto de perfil
         if (clear_foto_perfil === 'true') { 
             if (publicIdToDelete) {
                 try {
@@ -152,7 +153,10 @@ exports.updateBarbero = async (req, res, next) => {
                 }
             }
             foto_perfil_url = ''; 
-        } else if (req.file) { 
+        } 
+        // Si hay un archivo en la solicitud, es decir, se está subiendo una nueva imagen
+        else if (req.file) { 
+            // Si ya existe una foto, la eliminamos primero de Cloudinary
             if (publicIdToDelete) {
                 try {
                     await cloudinary.uploader.destroy(publicIdToDelete);
@@ -160,19 +164,16 @@ exports.updateBarbero = async (req, res, next) => {
                     console.warn('Advertencia: No se pudo eliminar la imagen antigua de Cloudinary:', destroyError.message);
                 }
             }
-
-            const result = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`, {
-                folder: 'barber_profiles', 
-                public_id: `barber-${id}-${Date.now()}` 
-            });
-            foto_perfil_url = result.secure_url;
+            // Asignamos la nueva URL de la imagen a la variable
+            // El paquete multer-storage-cloudinary ya sube la imagen y pone la URL en req.file.path
+            foto_perfil_url = req.file.path; // <-- CAMBIO CLAVE: Usar req.file.path
         }
 
         const updated = await Barbero.updateBarbero(id, {
             nombre: currentBarbero.nombre, 
             apellido: currentBarbero.apellido, 
             especialidad,
-            foto_perfil_url,
+            foto_perfil_url, // Se usa la URL que acabamos de obtener
             descripcion 
         });
 
