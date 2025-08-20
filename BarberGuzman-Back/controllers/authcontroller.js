@@ -16,8 +16,18 @@ const getBarberoIdForUser = async (userId, userRole) => {
         if (barbero) {
             barberoId = barbero.id;
         } else {
-            if (userRole !== 'barber') {
-                console.warn(`Usuario ${userRole} (ID: ${userId}) no tiene un registro de barbero asociado.`);
+            // Si el usuario es admin o super_admin pero no tiene un perfil de barbero, lo creamos
+            const user = await Usuario.findById(userId);
+            if (user) {
+                const newBarbero = await Barbero.create({
+                    id_usuario: userId,
+                    nombre: user.name,
+                    apellido: user.lastname,
+                    especialidad: user.role // Asignamos el rol como especialidad por defecto
+                });
+                barberoId = newBarbero.id;
+                await Usuario.updateBarberoId(userId, barberoId);
+                console.log(`Perfil de barbero creado automáticamente para el usuario ${user.correo}`);
             }
         }
     }
@@ -291,6 +301,10 @@ exports.updateProfile = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const updates = req.body;
+        // Agregamos un log para ver qué datos llegan en la petición
+        console.log('Datos recibidos para actualizar el perfil:', updates);
+        console.log('Archivo subido:', req.file);
+
         let profilePictureUrl = updates.profilePictureUrl;
 
         if (req.file && req.file.path) {
@@ -306,6 +320,11 @@ exports.updateProfile = async (req, res, next) => {
                 }
             }
             profilePictureUrl = req.file.path;
+        }
+
+        // Si no hay datos para actualizar ni una imagen, retornamos un 400
+        if (Object.keys(updates).length === 0 && !req.file) {
+            return res.status(400).json({ message: 'No se proporcionaron datos para actualizar el perfil.' });
         }
 
         const updated = await Usuario.updateProfile(userId, { ...updates, profilePictureUrl });
@@ -403,13 +422,14 @@ exports.updateUserRole = async (req, res, next) => {
                 if (!especialidad) {
                     return res.status(400).json({ message: 'Especialidad es obligatoria al asignar rol de barbero o admin con perfil de barbero.' });
                 }
-                await Barbero.create({
+                const newBarbero = await Barbero.create({
                     id_usuario: id,
                     nombre: user.name,
                     apellido: user.lastname,
                     especialidad: especialidad
                 });
-                message += ' Registro de barbero creado.';
+                await Usuario.updateBarberoId(id, newBarbero.id);
+                message += ' Registro de barbero creado y asociado.';
             } else {
                 message += ' Ya tenía un registro de barbero asociado.';
             }
@@ -417,6 +437,7 @@ exports.updateUserRole = async (req, res, next) => {
             const existingBarbero = await Barbero.getByUserId(id);
             if (existingBarbero) {
                 await Barbero.deleteBarbero(existingBarbero.id);
+                await Usuario.updateBarberoId(id, null);
                 message += ' Registro de barbero eliminado.';
             }
         }
@@ -498,6 +519,7 @@ exports.resetPassword = async (req, res, next) => {
         next(error);
     }
 };
+
 
 
 
