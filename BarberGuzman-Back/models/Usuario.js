@@ -46,34 +46,48 @@ class Usuario {
         return result.rows[0];
     }
     
+    // Función corregida:
     static async updateProfile(id, data) {
         let query = 'UPDATE usuarios SET ';
         const values = [];
         const fields = [];
+        let paramIndex = 1; // Usamos un índice para los parámetros
 
         if (data.name) {
-            fields.push('name = $1');
+            fields.push(`name = $${paramIndex++}`);
             values.push(data.name);
         }
         if (data.lastname) {
-            fields.push('lastname = $' + (values.length + 1));
+            fields.push(`lastname = $${paramIndex++}`);
             values.push(data.lastname);
         }
         if (data.correo) {
-            fields.push('correo = $' + (values.length + 1));
+            fields.push(`correo = $${paramIndex++}`);
             values.push(data.correo);
         }
         if (data.profilePictureUrl) {
-            fields.push('profile_picture_url = $' + (values.length + 1));
+            fields.push(`profile_picture_url = $${paramIndex++}`);
             values.push(data.profilePictureUrl);
         }
         
+        // ¡VERIFICACIÓN CRÍTICA!
+        if (fields.length === 0) {
+            // No hay campos para actualizar, no hay necesidad de hacer la consulta.
+            console.warn('Advertencia: No se proporcionaron campos para actualizar en updateProfile.');
+            return false;
+        }
+
         query += fields.join(', ');
-        query += ' WHERE id = $' + (values.length + 1);
+        query += ' WHERE id = $' + paramIndex; // El último parámetro es el ID
         values.push(id);
         
-        const result = await db.query(query, values);
-        return result.rowCount > 0;
+        try {
+            const result = await db.query(query, values);
+            return result.rowCount > 0;
+        } catch (error) {
+            console.error('Error en updateProfile:', error);
+            throw error; // Propaga el error para que el controlador lo maneje
+        }
     }
 
     static async updateGoogleId(id, googleId) {
@@ -151,3 +165,4 @@ class Usuario {
 }
 
 module.exports = Usuario;
+
