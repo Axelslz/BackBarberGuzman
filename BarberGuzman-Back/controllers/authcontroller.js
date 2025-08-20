@@ -271,51 +271,35 @@ exports.setPassword = async (req, res, next) => {
 };
 
 // Nueva función para actualizar el perfil del usuario
-exports.updateUserProfile = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    // Cambia 'lastname' a 'lastName' y 'correo' a 'email'
-    const { name, lastname, email } = req.body;
-    
-    // Obtiene la URL de la imagen de Cloudinary si existe
-    const profilePictureUrl = req.file ? req.file.path : null;
+exports.updateProfile = async (req, res, next) => {
+    try {
+        // req.user viene del middleware authenticateToken y contiene los datos del usuario del token
+        const userId = req.user.id;
+        const updates = req.body;
 
-    // Actualiza los datos para usar las nuevas claves
-    const updateData = {
-      name,
-      lastname,
-      email,
-      profilePictureUrl
-    };
+        const updated = await Usuario.updateProfile(userId, updates);
 
-    const updated = await Usuario.updateProfile(userId, updateData);
-
-    if (updated) {
-      // Obtener el perfil completo y actualizado para enviarlo al frontend
-      const updatedUser = await Usuario.findById(userId);
-      const id_barbero = await getBarberoIdForUser(updatedUser.id, updatedUser.role);
-
-      res.status(200).json({
-        message: 'Perfil actualizado con éxito',
-        user: {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          lastname: updatedUser.lastname,
-          correo: updatedUser.correo,
-          role: updatedUser.role,
-          citas_completadas: updatedUser.citas_completadas || 0,
-          profileImage: updatedUser.profile_picture_url,
-          ...(id_barbero && { id_barbero: id_barbero })
-        },
-      });
-    } else {
-      res.status(404).json({ message: 'Usuario no encontrado o no se pudo actualizar.' });
+        if (updated) {
+            // Si la actualización fue exitosa, obtén el usuario actualizado para enviar una respuesta completa
+            const user = await Usuario.findById(userId);
+            return res.status(200).json({ 
+                message: 'Perfil actualizado exitosamente.', 
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    lastname: user.lastname,
+                    correo: user.correo,
+                    role: user.role,
+                    profile_picture_url: user.profile_picture_url
+                }
+            });
+        } else {
+            return res.status(404).json({ message: 'Usuario no encontrado o no se pudo actualizar.' });
+        }
+    } catch (error) {
+        console.error('Error al actualizar el perfil:', error);
+        next(error);
     }
-
-  } catch (error) {
-    console.error('Error al actualizar el perfil:', error);
-    next(error);
-  }
 };
 
 exports.getMe = async (req, res, next) => {
