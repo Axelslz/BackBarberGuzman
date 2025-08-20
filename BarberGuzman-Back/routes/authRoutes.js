@@ -12,10 +12,13 @@ router.get('/me', authenticateToken, authController.getMe);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 
-router.put('/profile', authenticateToken, authController.updateProfile);
+// Se ha agregado el middleware para manejar la subida de una sola imagen
+// llamada 'profileImage' en el formulario.
+router.put('/profile', authenticateToken, uploadUserProfileImage, authController.updateProfile);
 
 // Rutas para super_admin
 router.get('/users', authenticateToken, authorizeRole(['super_admin']), authController.getAllUsers);
 router.put('/users/:id/role', authenticateToken, authorizeRole(['super_admin']), authController.updateUserRole);
 
 module.exports = router;
+

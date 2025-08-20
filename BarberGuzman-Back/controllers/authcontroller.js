@@ -2,26 +2,44 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const Usuario = require('../models/Usuario');
-const Barbero = require('../models/Barbero'); 
+const Barbero = require('../models/Barbero');
 const emailSender = require('../utils/emailSender');
 const { OAuth2Client } = require('google-auth-library');
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const cloudinary = require('../config/cloudinaryConfig');
 
 const getBarberoIdForUser = async (userId, userRole) => {
     let barberoId = null;
-    
+
     if (['barber', 'admin', 'super_admin'].includes(userRole)) {
         const barbero = await Barbero.getByUserId(userId);
         if (barbero) {
             barberoId = barbero.id;
         } else {
-            if (userRole !== 'barber') { 
+            if (userRole !== 'barber') {
                 console.warn(`Usuario ${userRole} (ID: ${userId}) no tiene un registro de barbero asociado.`);
             }
         }
     }
     return barberoId;
 };
+
+// Función para extraer el ID público de una URL de Cloudinary
+const getPublicIdFromCloudinaryUrl = (url) => {
+    if (!url) return null;
+    try {
+        const urlParts = url.split('/');
+        const uploadIndex = urlParts.indexOf('upload');
+        if (uploadIndex > -1 && urlParts.length > uploadIndex + 1) {
+            const pathAfterUpload = urlParts.slice(uploadIndex + 1).join('/');
+            return pathAfterUpload.split('.')[0];
+        }
+    } catch (e) {
+        console.error('Error al parsear URL de Cloudinary:', e);
+    }
+    return null;
+};
+
 
 exports.registrar = async (req, res, next) => {
     try {
@@ -32,7 +50,7 @@ exports.registrar = async (req, res, next) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const userRole = 'cliente'; 
+        const userRole = 'cliente';
 
         const newUser = await Usuario.create({
             name,
@@ -78,11 +96,11 @@ exports.login = async (req, res, next) => {
         const payload = {
             id: user.id,
             role: user.role,
-            name: user.name, 
+            name: user.name,
             lastname: user.lastname,
-            ...(id_barbero && { id_barbero: id_barbero }) 
+            ...(id_barbero && { id_barbero: id_barbero })
         };
-        
+
 
         const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
@@ -95,8 +113,8 @@ exports.login = async (req, res, next) => {
                 lastname: user.lastname,
                 correo: user.correo,
                 role: user.role,
-                citas_completadas: user.citas_completadas || 0, 
-                ...(id_barbero && { id_barbero: id_barbero }) 
+                citas_completadas: user.citas_completadas || 0,
+                ...(id_barbero && { id_barbero: id_barbero })
             }
         });
 
@@ -122,7 +140,7 @@ exports.googleLogin = async (req, res, next) => {
         const { sub: googleId, email, name, given_name, family_name, picture } = payload;
 
         let user = await Usuario.findByCorreo(email);
-        let isNewUser = false; 
+        let isNewUser = false;
 
         if (!user) {
             console.log(`Usuario con correo ${email} no encontrado, creando nuevo registro.`);
@@ -135,7 +153,7 @@ exports.googleLogin = async (req, res, next) => {
                 lastname: lastName,
                 correo: email,
                 profilePicture: picture,
-                role: 'cliente' 
+                role: 'cliente'
             });
             isNewUser = true;
             console.log(`Nuevo usuario de Google creado: ${user.correo}`);
@@ -151,7 +169,7 @@ exports.googleLogin = async (req, res, next) => {
             });
 
             if (!user.password) {
-                isNewUser = true; 
+                isNewUser = true;
                 console.log(`Usuario existente ${user.correo} sin contraseña local, se redirigirá para establecer una.`);
             }
         }
@@ -171,7 +189,7 @@ exports.googleLogin = async (req, res, next) => {
                 redirectRequired: true
             });
         } else {
-            
+
             const userProfile = await Usuario.findById(user.id);
 
             const id_barbero = await getBarberoIdForUser(userProfile.id, userProfile.role);
@@ -179,7 +197,7 @@ exports.googleLogin = async (req, res, next) => {
             const appPayload = {
                 id: userProfile.id,
                 role: userProfile.role,
-                name: userProfile.name, 
+                name: userProfile.name,
                 lastname: userProfile.lastname,
                 ...(id_barbero && { id_barbero: id_barbero })
             };
@@ -244,7 +262,7 @@ exports.setPassword = async (req, res, next) => {
         const appPayload = {
             id: user.id,
             role: user.role,
-            name: user.name, 
+            name: user.name,
             lastname: user.lastname,
             ...(id_barbero && { id_barbero: id_barbero })
         };
@@ -273,17 +291,32 @@ exports.setPassword = async (req, res, next) => {
 // Nueva función para actualizar el perfil del usuario
 exports.updateProfile = async (req, res, next) => {
     try {
-        // req.user viene del middleware authenticateToken y contiene los datos del usuario del token
         const userId = req.user.id;
         const updates = req.body;
+        let profilePictureUrl = updates.profilePictureUrl;
 
-        const updated = await Usuario.updateProfile(userId, updates);
+        // Si se subió un nuevo archivo, usamos su URL de Cloudinary
+        if (req.file && req.file.path) {
+            const user = await Usuario.findById(userId);
+            if (user && user.profile_picture_url) {
+                const publicIdToDelete = getPublicIdFromCloudinaryUrl(user.profile_picture_url);
+                if (publicIdToDelete) {
+                    try {
+                        await cloudinary.uploader.destroy(publicIdToDelete);
+                    } catch (destroyError) {
+                        console.warn('Advertencia: No se pudo eliminar la imagen antigua de Cloudinary:', destroyError.message);
+                    }
+                }
+            }
+            profilePictureUrl = req.file.path;
+        }
+
+        const updated = await Usuario.updateProfile(userId, { ...updates, profilePictureUrl });
 
         if (updated) {
-            // Si la actualización fue exitosa, obtén el usuario actualizado para enviar una respuesta completa
             const user = await Usuario.findById(userId);
-            return res.status(200).json({ 
-                message: 'Perfil actualizado exitosamente.', 
+            return res.status(200).json({
+                message: 'Perfil actualizado exitosamente.',
                 user: {
                     id: user.id,
                     name: user.name,
@@ -304,19 +337,19 @@ exports.updateProfile = async (req, res, next) => {
 
 exports.getMe = async (req, res, next) => {
     try {
-        
+
         const user = await Usuario.findById(req.user.id);
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
         let barberoInfo = null;
-        if (req.user.id_barbero) { 
+        if (req.user.id_barbero) {
              barberoInfo = await Barbero.getById(req.user.id_barbero);
-        } else { 
-            barberoInfo = await getBarberoIdForUser(user.id, user.role); 
+        } else {
+            barberoInfo = await getBarberoIdForUser(user.id, user.role);
             if (barberoInfo) {
-                barberoInfo = await Barbero.getById(barberoInfo); 
+                barberoInfo = await Barbero.getById(barberoInfo);
             }
         }
 
@@ -350,8 +383,8 @@ exports.getAllUsers = async (req, res, next) => {
 
 exports.updateUserRole = async (req, res, next) => {
     try {
-        const { id } = req.params; 
-        const { newRole, especialidad } = req.body; 
+        const { id } = req.params;
+        const { newRole, especialidad } = req.body;
 
         if (!newRole) {
             return res.status(400).json({ message: 'El nuevo rol es obligatorio.' });
@@ -468,6 +501,8 @@ exports.resetPassword = async (req, res, next) => {
         next(error);
     }
 };
+
+
 
 
 
