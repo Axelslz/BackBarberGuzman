@@ -12,7 +12,7 @@ router.get('/me', authenticateToken, authController.getMe);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 
-router.put('/profile', authenticateToken, uploadUserProfileImage, authController.updateUserProfile);
+router.put('/profile', authenticateToken, authController.updateProfile);
 
 // Rutas para super_admin
 router.get('/users', authenticateToken, authorizeRole(['super_admin']), authController.getAllUsers);
