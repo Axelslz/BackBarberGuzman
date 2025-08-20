@@ -15,7 +15,11 @@ const bodyParser = require('body-parser');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
+const corsOptions = {
+  origin: 'https://guzmanbarberweb.netlify.app/'
+};
+app.use(cors(corsOptions));
+
 app.use(helmet());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false })); 
