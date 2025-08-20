@@ -51,34 +51,35 @@ class Usuario {
         let query = 'UPDATE usuarios SET ';
         const values = [];
         const fields = [];
-        let paramIndex = 1; // Usamos un índice para los parámetros
+        let paramIndex = 1;
 
-        if (data.name) {
+        if (data.name !== undefined) {
             fields.push(`name = $${paramIndex++}`);
             values.push(data.name);
         }
-        if (data.lastname) {
+        if (data.lastname !== undefined) {
             fields.push(`lastname = $${paramIndex++}`);
             values.push(data.lastname);
         }
-        if (data.correo) {
+        if (data.correo !== undefined) {
             fields.push(`correo = $${paramIndex++}`);
             values.push(data.correo);
         }
-        if (data.profilePictureUrl) {
+        if (data.profilePictureUrl !== undefined) {
             fields.push(`profile_picture_url = $${paramIndex++}`);
             values.push(data.profilePictureUrl);
         }
-        
-        // ¡VERIFICACIÓN CRÍTICA!
+        if (data.telefono !== undefined) {
+            fields.push(`telefono = $${paramIndex++}`);
+            values.push(data.telefono);
+        }
+
         if (fields.length === 0) {
-            // No hay campos para actualizar, no hay necesidad de hacer la consulta.
-            console.warn('Advertencia: No se proporcionaron campos para actualizar en updateProfile.');
             return false;
         }
 
         query += fields.join(', ');
-        query += ' WHERE id = $' + paramIndex; // El último parámetro es el ID
+        query += ' WHERE id = $' + paramIndex;
         values.push(id);
         
         try {
@@ -86,7 +87,7 @@ class Usuario {
             return result.rowCount > 0;
         } catch (error) {
             console.error('Error en updateProfile:', error);
-            throw error; // Propaga el error para que el controlador lo maneje
+            throw error;
         }
     }
 
@@ -162,7 +163,17 @@ class Usuario {
         );
         return result.rowCount > 0;
     }
+
+    // Esta es la función que faltaba para vincular el perfil de barbero.
+    static async updateBarberoId(userId, barberoId) {
+        const result = await db.query(
+            'UPDATE usuarios SET id_barbero = $1 WHERE id = $2',
+            [barberoId, userId]
+        );
+        return result.rowCount > 0;
+    }
 }
 
 module.exports = Usuario;
+
 
