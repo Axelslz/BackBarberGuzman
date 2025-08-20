@@ -1,47 +1,47 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-const db = mysql.createPool({
+const db = new Pool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+    port: process.env.DB_PORT || 5432, // Asegúrate de tener el puerto correcto
+    ssl: {
+        rejectUnauthorized: false // Permite la conexión SSL en Render
+    }
 });
 
 async function initializeDatabase() {
     try {
-        const connection = await db.getConnection();
-        console.log('Conexión a la base de datos MySQL establecida correctamente.');
+        const client = await db.connect();
+        console.log('Conexión a la base de datos PostgreSQL establecida correctamente.');
 
-        // 1. SQL para crear la tabla 'usuarios' si no existe
+        // 1. SQL para crear la tabla 'usuarios'
         const createUsersTableSql = `
             CREATE TABLE IF NOT EXISTS usuarios (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(100) NOT NULL,
                 lastname VARCHAR(100) NOT NULL,
                 correo VARCHAR(255) NOT NULL UNIQUE,
                 password VARCHAR(255) NOT NULL,
-                role ENUM('cliente', 'admin', 'super_admin') NOT NULL DEFAULT 'cliente',
+                role VARCHAR(50) NOT NULL DEFAULT 'cliente' CHECK (role IN ('cliente', 'admin', 'super_admin')),
                 citas_completadas INT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 resetPasswordToken VARCHAR(255) DEFAULT NULL,
-                resetPasswordExpires DATETIME DEFAULT NULL,
+                resetPasswordExpires TIMESTAMP DEFAULT NULL,
                 nombre_cliente VARCHAR(255) NULL,
-                google_id VARCHAR(255) DEFAULT NULL,
-                profile_picture_url VARCHAR(255) DEFAULT NULL,
-                UNIQUE (google_id)
+                google_id VARCHAR(255) UNIQUE DEFAULT NULL,
+                profile_picture_url VARCHAR(255) DEFAULT NULL
             );
         `;
-        await connection.execute(createUsersTableSql);
+        await client.query(createUsersTableSql);
         console.log('Tabla "usuarios" verificada/creada exitosamente.');
 
-        // 2. SQL para crear la tabla 'barberos' si no existe
+        // 2. SQL para crear la tabla 'barberos'
         const createBarbersTableSql = `
             CREATE TABLE IF NOT EXISTS barberos (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 id_usuario INT NOT NULL UNIQUE,
                 nombre VARCHAR(100) NOT NULL,
                 apellido VARCHAR(100) NOT NULL,
@@ -52,37 +52,37 @@ async function initializeDatabase() {
                 FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE CASCADE
             );
         `;
-        await connection.execute(createBarbersTableSql);
+        await client.query(createBarbersTableSql);
         console.log('Tabla "barberos" verificada/creada exitosamente.');
-
-        // 3. SQL para crear la tabla 'servicios' si no existe
+        
+        // 3. SQL para crear la tabla 'servicios'
         const createServicesTableSql = `
             CREATE TABLE IF NOT EXISTS servicios (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 nombre VARCHAR(100) NOT NULL UNIQUE,
                 descripcion TEXT,
                 precio DECIMAL(10, 2) NOT NULL,
                 duracion_minutos INT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                tipo ENUM('individual', 'paquete') NOT NULL DEFAULT 'individual'
+                tipo VARCHAR(50) NOT NULL DEFAULT 'individual' CHECK (tipo IN ('individual', 'paquete'))
             );
         `;
-        await connection.execute(createServicesTableSql);
+        await client.query(createServicesTableSql);
         console.log('Tabla "servicios" verificada/creada exitosamente.');
 
-        // 4. SQL para crear la tabla 'citas' si no existe
+        // 4. SQL para crear la tabla 'citas'
         const createAppointmentsTableSql = `
             CREATE TABLE IF NOT EXISTS citas (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 id_cliente INT NOT NULL,
                 id_barbero INT NOT NULL,
                 id_servicio INT NOT NULL,
                 fecha_cita DATE NOT NULL,
                 hora_inicio TIME NOT NULL,
                 hora_fin TIME NOT NULL,
-                estado ENUM('pendiente', 'confirmada', 'cancelada', 'completada') NOT NULL DEFAULT 'pendiente',
+                estado VARCHAR(50) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'confirmada', 'cancelada', 'completada')),
                 duracion_minutos INT NOT NULL DEFAULT 60,
-                contador_actualizado TINYINT(1) DEFAULT 0,
+                contador_actualizado BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (id_cliente) REFERENCES usuarios(id) ON DELETE CASCADE,
                 FOREIGN KEY (id_barbero) REFERENCES barberos(id) ON DELETE CASCADE,
@@ -90,13 +90,13 @@ async function initializeDatabase() {
                 UNIQUE (id_barbero, fecha_cita, hora_inicio)
             );
         `;
-        await connection.execute(createAppointmentsTableSql);
+        await client.query(createAppointmentsTableSql);
         console.log('Tabla "citas" verificada/creada exitosamente.');
 
-        // 5. SQL para crear la tabla 'horarios_no_disponibles_barberos' si no existe
+        // 5. SQL para crear la tabla 'horarios_no_disponibles_barberos'
         const createHorariosNoDisponiblesTableSql = `
             CREATE TABLE IF NOT EXISTS horarios_no_disponibles_barberos (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 id_barbero INT NOT NULL,
                 fecha DATE NOT NULL,
                 hora_inicio TIME DEFAULT NULL,
@@ -107,13 +107,13 @@ async function initializeDatabase() {
                 UNIQUE (id_barbero, fecha, hora_inicio, hora_fin)
             );
         `;
-        await connection.execute(createHorariosNoDisponiblesTableSql);
+        await client.query(createHorariosNoDisponiblesTableSql);
         console.log('Tabla "horarios_no_disponibles_barberos" verificada/creada exitosamente.');
 
-        // 6. SQL para crear la tabla 'about_info' si no existe
+        // 6. SQL para crear la tabla 'about_info'
         const createAboutInfoTableSql = `
             CREATE TABLE IF NOT EXISTS about_info (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 titulo VARCHAR(255) NOT NULL,
                 parrafo1 TEXT,
                 parrafo2 TEXT,
@@ -121,28 +121,32 @@ async function initializeDatabase() {
                 imagen_url2 VARCHAR(255) DEFAULT NULL,
                 imagen_url3 VARCHAR(255) DEFAULT '',
                 imagen_url4 VARCHAR(255) DEFAULT '',
-                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
             );
         `;
-        await connection.execute(createAboutInfoTableSql);
+        await client.query(createAboutInfoTableSql);
         console.log('Tabla "about_info" verificada/creada exitosamente.');
 
-        const [rows] = await connection.query('SELECT COUNT(*) AS count FROM about_info');
+        // Insertar datos iniciales si la tabla está vacía
+        const { rows } = await client.query('SELECT COUNT(*) AS count FROM about_info');
         if (rows[0].count === 0) {
-            await connection.execute(`
+            await client.query(`
                 INSERT INTO about_info (id, titulo, parrafo1, parrafo2, imagen_url1, imagen_url2, imagen_url3, imagen_url4)
                 VALUES (1, 'Bienvenidos a nuestra Barbería', 'Somos un equipo de barberos apasionados por el arte del cuidado masculino. Ofrecemos cortes modernos, afeitados clásicos y tratamientos de barba personalizados para que siempre luzcas tu mejor versión.', 'En nuestra barbería, la tradición se encuentra con la innovación. Utilizamos productos de alta calidad y técnicas vanguardistas para garantizar resultados excepcionales y una experiencia inigualable en cada visita. ¡Te esperamos para transformar tu estilo!', '', '', '', '');
             `);
             console.log('Fila inicial insertada en "about_info".');
         }
 
-        connection.release(); 
+        client.release();
     } catch (err) {
         console.error('Error FATAL al inicializar la base de datos o crear las tablas:', err.message);
         process.exit(1);
     }
 }
 
-initializeDatabase(); 
+initializeDatabase();
 
-module.exports = db;
+module.exports = {
+    query: (text, params) => db.query(text, params),
+    client: db
+};
