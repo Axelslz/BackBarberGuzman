@@ -185,6 +185,13 @@ async function initializeDatabase() {
                 );
                 console.log(`Usuario Super Admin creado y asociado al perfil de barbero ID: ${idPerfilBarbero}`);
 
+                // Insertar un usuario con rol 'admin' que no es barbero
+                const adminUser = await client.query(
+                    'INSERT INTO usuarios (name, lastname, correo, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+                    ['Admin', 'Ejemplo', 'admin@example.com', password, 'admin']
+                );
+                console.log(`Usuario Admin creado con ID: ${adminUser.rows[0].id}`);
+
                 // Insertar datos de 'about_info'
                 await client.query(`
                     INSERT INTO about_info (id, titulo, parrafo1, parrafo2)
@@ -228,4 +235,5 @@ module.exports = {
     query: (text, params) => db.query(text, params),
     client: db
 };
+
 
