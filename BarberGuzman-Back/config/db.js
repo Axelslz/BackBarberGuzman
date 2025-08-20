@@ -14,11 +14,11 @@ const db = new Pool({
 });
 
 async function initializeDatabase() {
+    let client;
     try {
-        const client = await db.connect();
+        client = await db.connect();
         console.log('Conexión a la base de datos PostgreSQL establecida correctamente.');
 
-        // Sección de creación de tablas
         // 1. Tabla 'usuarios'
         const createUsersTableSql = `
             CREATE TABLE IF NOT EXISTS usuarios (
@@ -32,9 +32,9 @@ async function initializeDatabase() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 resetPasswordToken VARCHAR(255) DEFAULT NULL,
                 resetPasswordExpires TIMESTAMP DEFAULT NULL,
-                nombre_cliente VARCHAR(255) NULL,
                 google_id VARCHAR(255) UNIQUE DEFAULT NULL,
-                profile_picture_url VARCHAR(255) DEFAULT NULL
+                profile_picture_url VARCHAR(255) DEFAULT NULL,
+                telefono VARCHAR(20) DEFAULT NULL
             );
         `;
         await client.query(createUsersTableSql);
@@ -129,54 +129,96 @@ async function initializeDatabase() {
         await client.query(createAboutInfoTableSql);
         console.log('Tabla "about_info" verificada/creada exitosamente.');
 
+        // AQUI ESTÁ LA PARTE CRUCIAL: Modificar la tabla 'usuarios' para agregar el id_barbero
+        const checkColumnExistsSql = `
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'usuarios' AND column_name = 'id_barbero';
+        `;
+        const columnExists = await client.query(checkColumnExistsSql);
+
+        if (columnExists.rowCount === 0) {
+            console.log('La columna "id_barbero" no existe, agregándola a la tabla "usuarios"...');
+            await client.query(`
+                ALTER TABLE usuarios
+                ADD COLUMN id_barbero INT NULL,
+                ADD CONSTRAINT fk_id_barbero
+                    FOREIGN KEY (id_barbero)
+                    REFERENCES barberos(id)
+                    ON DELETE SET NULL;
+            `);
+            console.log('Columna "id_barbero" agregada exitosamente.');
+        } else {
+            console.log('La columna "id_barbero" ya existe. No se realizaron cambios.');
+        }
+
         // Sección de inserción de datos iniciales
-        // 1. Verificar si existen usuarios
+        // Se insertarán solo si no hay usuarios existentes.
         const { rows: users } = await client.query('SELECT COUNT(*) AS count FROM usuarios');
-        if (users[0].count === 0) {
+        if (users[0].count === '0') {
             console.log('No se encontraron usuarios, insertando datos iniciales...');
             
-            // Hashear la contraseña (usa una real, o una temporal)
             const password = await bcrypt.hash('passwordSegura123', 10);
 
-            // Insertar el super_admin
-            const superAdmin = await client.query(
-                'INSERT INTO usuarios (name, lastname, correo, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                ['Adrian', 'Guzman', 'guz.art.97@gmail.com', password, 'super_admin']
-            );
-            console.log(`Usuario Super Admin creado con ID: ${superAdmin.rows[0].id}`);
+            // Inicia una transacción para asegurar que todo el proceso sea atómico
+            await client.query('BEGIN');
+            
+            try {
+                // 1. Crear el usuario que será el super_admin y también el barbero principal
+                const superAdminUser = await client.query(
+                    'INSERT INTO usuarios (name, lastname, correo, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+                    ['Adrian', 'Guzman', 'guz.art.97@gmail.com', password, 'super_admin']
+                );
+                const idUsuarioSuperAdmin = superAdminUser.rows[0].id;
 
-            // Insertar un usuario con rol 'barber'
-            const barberUser = await client.query(
-                'INSERT INTO usuarios (name, lastname, correo, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                ['Adrian', 'Guzman', 'guz.art.97@gmail.com', password, 'barber']
-            );
-            console.log(`Usuario Barbero creado con ID: ${barberUser.rows[0].id}`);
+                // 2. Crear el perfil de barbero y asociarlo al usuario super_admin
+                const perfilBarbero = await client.query(
+                    'INSERT INTO barberos (id_usuario, nombre, apellido, especialidad) VALUES ($1, $2, $3, $4) RETURNING id',
+                    [idUsuarioSuperAdmin, 'Adrian', 'Guzman', 'Cortes Modernos']
+                );
+                const idPerfilBarbero = perfilBarbero.rows[0].id;
 
-            // Asociar el usuario barbero con el perfil de barbero
-            await client.query(
-                'INSERT INTO barberos (id_usuario, nombre, apellido, especialidad) VALUES ($1, $2, $3, $4)',
-                [barberUser.rows[0].id, 'Adrian', 'Guzman', 'Cortes Modernos']
-            );
-            console.log('Perfil de Barbero creado y asociado al usuario.');
+                // 3. Actualizar el usuario super_admin para que apunte al id de su perfil de barbero
+                await client.query(
+                    'UPDATE usuarios SET id_barbero = $1 WHERE id = $2',
+                    [idPerfilBarbero, idUsuarioSuperAdmin]
+                );
+                console.log(`Usuario Super Admin creado y asociado al perfil de barbero ID: ${idPerfilBarbero}`);
 
+                // Insertar datos de 'about_info'
+                await client.query(`
+                    INSERT INTO about_info (id, titulo, parrafo1, parrafo2)
+                    VALUES (1, 'Bienvenidos a nuestra Barbería', 'Somos un equipo de barberos apasionados por el arte del cuidado masculino. Ofrecemos cortes modernos, afeitados clásicos y tratamientos de barba personalizados para que siempre luzcas tu mejor versión.', 'En nuestra barbería, la tradición se encuentra con la innovación. Utilizamos productos de alta calidad y técnicas vanguardistas para garantizar resultados excepcionales y una experiencia inigualable en cada visita. ¡Te esperamos para transformar tu estilo!');
+                `);
+                console.log('Fila inicial insertada en "about_info".');
+
+                // Insertar servicios iniciales
+                await client.query(`
+                    INSERT INTO servicios (nombre, descripcion, precio, duracion_minutos) VALUES
+                    ('Corte de Cabello', 'Incluye lavado y peinado.', 10.00, 60),
+                    ('Afeitado Clásico', 'Con toallas calientes y productos de alta calidad.', 8.00, 45),
+                    ('Corte + Afeitado', 'Paquete completo para un cambio de look total.', 15.00, 90);
+                `);
+                console.log('Servicios iniciales insertados.');
+                
+                await client.query('COMMIT');
+                console.log("¡Datos iniciales creados exitosamente!");
+
+            } catch (initError) {
+                await client.query('ROLLBACK');
+                console.error('Error al poblar la base de datos, revirtiendo cambios:', initError);
+                throw initError;
+            }
         } else {
             console.log('Usuarios existentes. No se insertarán datos iniciales.');
         }
 
-        // 2. Verificar si existen datos en 'about_info'
-        const { rows: aboutInfo } = await client.query('SELECT COUNT(*) AS count FROM about_info');
-        if (aboutInfo[0].count === 0) {
-            await client.query(`
-                INSERT INTO about_info (id, titulo, parrafo1, parrafo2, imagen_url1, imagen_url2, imagen_url3, imagen_url4)
-                VALUES (1, 'Bienvenidos a nuestra Barbería', 'Somos un equipo de barberos apasionados por el arte del cuidado masculino. Ofrecemos cortes modernos, afeitados clásicos y tratamientos de barba personalizados para que siempre luzcas tu mejor versión.', 'En nuestra barbería, la tradición se encuentra con la innovación. Utilizamos productos de alta calidad y técnicas vanguardistas para garantizar resultados excepcionales y una experiencia inigualable en cada visita. ¡Te esperamos para transformar tu estilo!', '', '', '', '');
-            `);
-            console.log('Fila inicial insertada en "about_info".');
-        }
-
-        client.release();
     } catch (err) {
-        console.error('Error FATAL al inicializar la base de datos o crear las tablas:', err.message);
-        // process.exit(1); // Descomenta esta línea si quieres que la app se detenga si la conexión falla
+        console.error('Error FATAL al inicializar la base de datos:', err.message);
+    } finally {
+        if (client) {
+            client.release();
+        }
     }
 }
 
@@ -186,3 +228,4 @@ module.exports = {
     query: (text, params) => db.query(text, params),
     client: db
 };
+
