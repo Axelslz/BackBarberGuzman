@@ -21,12 +21,11 @@ const getPublicIdFromCloudinaryUrl = (url) => {
 
 exports.getBarberos = async (req, res, next) => {
     try {
-        // Usa el método getAllBarbersWithUserDetails para obtener información completa
         const barberos = await Barbero.getAllBarbersWithUserDetails();
         
-        // Si no hay barberos disponibles, regresa un mensaje apropiado
+        // Se cambió de 404 a 200 y se devuelve un array vacío
         if (!barberos || barberos.length === 0) {
-            return res.status(404).json({ message: 'No hay barberos disponibles en este momento.' });
+            return res.status(200).json([]);
         }
 
         res.status(200).json(barberos);
@@ -150,7 +149,6 @@ exports.updateBarbero = async (req, res, next) => {
         let foto_perfil_url = currentBarbero.foto_perfil_url || '';
         let publicIdToDelete = getPublicIdFromCloudinaryUrl(currentBarbero.foto_perfil_url);
 
-        // Si se pide borrar la foto de perfil
         if (clear_foto_perfil === 'true') {
             if (publicIdToDelete) {
                 try {
@@ -160,10 +158,7 @@ exports.updateBarbero = async (req, res, next) => {
                 }
             }
             foto_perfil_url = '';
-        }
-        // Si hay un archivo en la solicitud, es decir, se está subiendo una nueva imagen
-        else if (req.file) {
-            // Si ya existe una foto, la eliminamos primero de Cloudinary
+        } else if (req.file) {
             if (publicIdToDelete) {
                 try {
                     await cloudinary.uploader.destroy(publicIdToDelete);
@@ -171,17 +166,14 @@ exports.updateBarbero = async (req, res, next) => {
                     console.warn('Advertencia: No se pudo eliminar la imagen antigua de Cloudinary:', destroyError.message);
                 }
             }
-            // Asignamos la nueva URL de la imagen a la variable
-            // El paquete multer-storage-cloudinary ya sube la imagen y pone la URL en req.file.path
             foto_perfil_url = req.file.path;
         }
 
         const updated = await Barbero.updateBarbero(id, {
-            // Se usa el valor de la petición si existe, de lo contrario se mantiene el actual
             nombre: nombre !== undefined ? nombre : currentBarbero.nombre,
             apellido: apellido !== undefined ? apellido : currentBarbero.apellido,
             especialidad: especialidad !== undefined ? especialidad : currentBarbero.especialidad,
-            foto_perfil_url, // Se usa la URL que acabamos de obtener
+            foto_perfil_url,
             descripcion: descripcion !== undefined ? descripcion : currentBarbero.descripcion
         });
 
@@ -195,4 +187,5 @@ exports.updateBarbero = async (req, res, next) => {
         next(error);
     }
 };
+
 

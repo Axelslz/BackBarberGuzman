@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authcontroller');
 const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
-const { uploadUserProfileImage } = require('../middlewares/uploadMiddleware'); // Importa el middleware de subida
+const { uploadUserProfileImage } = require('../middlewares/uploadMiddleware');
 
 router.post('/registrar', authController.registrar);
 router.post('/login', authController.login);
@@ -11,12 +11,8 @@ router.post('/set-password', authController.setPassword);
 router.get('/me', authenticateToken, authController.getMe);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
-
-// Se ha agregado el middleware para manejar la subida de una sola imagen
-// llamada 'profileImage' en el formulario.
 router.put('/profile', authenticateToken, uploadUserProfileImage, authController.updateProfile);
 
-// Rutas para super_admin
 router.get('/users', authenticateToken, authorizeRole(['super_admin']), authController.getAllUsers);
 router.put('/users/:id/role', authenticateToken, authorizeRole(['super_admin']), authController.updateUserRole);
 

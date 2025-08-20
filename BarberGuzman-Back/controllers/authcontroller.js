@@ -24,7 +24,6 @@ const getBarberoIdForUser = async (userId, userRole) => {
     return barberoId;
 };
 
-// Función para extraer el ID público de una URL de Cloudinary
 const getPublicIdFromCloudinaryUrl = (url) => {
     if (!url) return null;
     try {
@@ -288,14 +287,12 @@ exports.setPassword = async (req, res, next) => {
     }
 };
 
-// Nueva función para actualizar el perfil del usuario
 exports.updateProfile = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const updates = req.body;
         let profilePictureUrl = updates.profilePictureUrl;
 
-        // Si se subió un nuevo archivo, usamos su URL de Cloudinary
         if (req.file && req.file.path) {
             const user = await Usuario.findById(userId);
             if (user && user.profile_picture_url) {
