@@ -1,12 +1,12 @@
 const dbCita = require('../config/db'); 
 
 class Cita {
-    static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
+   static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos }) {
         const result = await dbCita.query(
-            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
-            [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente', nombre_cliente]
+            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+            [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente']
         );
-        return { id: result.rows[0].id, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0, nombre_cliente };
+        return { id: result.rows[0].id, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0 };
     }
 
     static async getCitasByBarberoAndDate(idBarbero, fecha) {
@@ -73,7 +73,7 @@ class Cita {
                 c.id_barbero,
                 c.id_servicio,
                 -- En PostgreSQL, se usa COALESCE para la primera expresión no nula y || para concatenar strings
-                COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname)) AS cliente_nombre,
+                CONCAT(u_cliente.name, ' ', u_cliente.lastname) AS cliente_nombre,
                 u_cliente.name AS cliente_name,
                 u_cliente.lastname AS cliente_lastname,
                 u_barbero.name AS barbero_name,

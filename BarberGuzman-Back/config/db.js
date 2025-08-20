@@ -169,7 +169,7 @@ async function initializeDatabase() {
 
                 // 2. Crear el perfil de barbero y asociarlo al usuario super_admin
                 const perfilBarbero = await client.query(
-                    'INSERT INTO barberos (id_usuario, nombre, apellido, especialidad) VALUES ($1, $2, $3, $4) RETURNING id',
+                    'INSERT INTO barberos (id_usuario, name, lastname,  especialidad) VALUES ($1, $2, $3, $4) RETURNING id',
                     [idUsuarioSuperAdmin, 'Adrian', 'Guzman', 'Cortes Modernos']
                 );
                 const idPerfilBarbero = perfilBarbero.rows[0].id;

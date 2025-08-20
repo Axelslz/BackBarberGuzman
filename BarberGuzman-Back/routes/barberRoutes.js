@@ -23,7 +23,6 @@ router.put(
     barberController.updateBarbero
 );
 
-router.get('/:id', barberController.getBarberoById);
 
 module.exports = router;
 
