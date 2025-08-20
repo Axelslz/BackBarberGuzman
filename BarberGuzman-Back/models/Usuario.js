@@ -2,112 +2,111 @@ const db = require('../config/db');
 
 class Usuario {
     static async create({ name, lastname, correo, password, role }) {
-        const [result] = await db.query(
-            'INSERT INTO usuarios (name, lastname, correo, password, role, citas_completadas) VALUES (?, ?, ?, ?, ?, 0)',
+        const result = await db.query(
+            'INSERT INTO usuarios (name, lastname, correo, password, role, citas_completadas) VALUES ($1, $2, $3, $4, $5, 0) RETURNING id',
             [name, lastname, correo, password, role]
         );
-        return { id: result.insertId, name, lastname, correo, role };
+        return { id: result.rows[0].id, name, lastname, correo, role };
     }
 
     static async createGoogleUser({ googleId, name, lastname, correo, profilePicture, role }) {
-        const [result] = await db.query(
-            'INSERT INTO usuarios (google_id, name, lastname, correo, password, role, citas_completadas, profile_picture_url) VALUES (?, ?, ?, ?, NULL, ?, 0, ?)',
+        const result = await db.query(
+            'INSERT INTO usuarios (google_id, name, lastname, correo, password, role, citas_completadas, profile_picture_url) VALUES ($1, $2, $3, $4, NULL, $5, 0, $6) RETURNING id',
             [googleId, name, lastname, correo, role, profilePicture]
         );
-        return { id: result.insertId, google_id: googleId, name, lastname, correo, role, profilePicture };
+        return { id: result.rows[0].id, google_id: googleId, name, lastname, correo, role, profilePicture };
     }
 
     static async getById(id) {
-        const [rows] = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
-        return rows[0];
+        const result = await db.query('SELECT * FROM usuarios WHERE id = $1', [id]);
+        return result.rows[0];
     }
 
     static async findByCorreo(correo) {
-        const [rows] = await db.query(`
+        const result = await db.query(`
             SELECT
                 u.id, u.name, u.lastname, u.correo, u.password, u.role, u.citas_completadas, u.google_id, u.profile_picture_url,
                 b.id AS id_barbero, b.especialidad
             FROM usuarios u
             LEFT JOIN barberos b ON u.id = b.id_usuario
-            WHERE u.correo = ?
+            WHERE u.correo = $1
         `, [correo]);
-        return rows[0];
+        return result.rows[0];
     }
 
     static async findById(id) {
-        const [rows] = await db.query(`
+        const result = await db.query(`
             SELECT
                 u.id, u.name, u.lastname, u.correo, u.role, u.citas_completadas, u.google_id, u.profile_picture_url,
                 b.id AS id_barbero, b.especialidad
             FROM usuarios u
             LEFT JOIN barberos b ON u.id = b.id_usuario
-            WHERE u.id = ?
+            WHERE u.id = $1
         `, [id]);
-        return rows[0];
+        return result.rows[0];
     }
     
-    // Nuevo método para actualizar el perfil del usuario
     static async updateProfile(id, data) {
-      let query = 'UPDATE usuarios SET ';
-      const values = [];
-      const fields = [];
+        let query = 'UPDATE usuarios SET ';
+        const values = [];
+        const fields = [];
 
-      if (data.name) {
-        fields.push('name = ?');
-        values.push(data.name);
-      }
-      if (data.lastname) {
-        fields.push('lastname = ?');
-        values.push(data.lastname);
-      }
-      if (data.correo) {
-        fields.push('correo = ?');
-        values.push(data.correo);
-      }
-      if (data.profilePictureUrl) { // Nuevo campo para la URL de la foto de perfil
-        fields.push('profile_picture_url = ?');
-        values.push(data.profilePictureUrl);
-      }
-      
-      query += fields.join(', ');
-      query += ' WHERE id = ?';
-      values.push(id);
-      
-      const [result] = await db.query(query, values);
-      return result.affectedRows > 0;
+        if (data.name) {
+            fields.push('name = $1');
+            values.push(data.name);
+        }
+        if (data.lastname) {
+            fields.push('lastname = $' + (values.length + 1));
+            values.push(data.lastname);
+        }
+        if (data.correo) {
+            fields.push('correo = $' + (values.length + 1));
+            values.push(data.correo);
+        }
+        if (data.profilePictureUrl) {
+            fields.push('profile_picture_url = $' + (values.length + 1));
+            values.push(data.profilePictureUrl);
+        }
+        
+        query += fields.join(', ');
+        query += ' WHERE id = $' + (values.length + 1);
+        values.push(id);
+        
+        const result = await db.query(query, values);
+        return result.rowCount > 0;
     }
 
     static async updateGoogleId(id, googleId) {
-        const [result] = await db.query(
-            'UPDATE usuarios SET google_id = ? WHERE id = ?',
+        const result = await db.query(
+            'UPDATE usuarios SET google_id = $1 WHERE id = $2',
             [googleId, id]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 
     static async updateProfileFromGoogle(id, { name, lastname, profilePicture }) {
-        const [result] = await db.query(
-            'UPDATE usuarios SET name = ?, lastname = ?, profile_picture_url = ? WHERE id = ?',
+        const result = await db.query(
+            'UPDATE usuarios SET name = $1, lastname = $2, profile_picture_url = $3 WHERE id = $4',
             [name, lastname, profilePicture, id]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 
     static async updateRole(id, newRole) {
-        const [result] = await db.query('UPDATE usuarios SET role = ? WHERE id = ?', [newRole, id]);
-        return result.affectedRows > 0;
+        const result = await db.query('UPDATE usuarios SET role = $1 WHERE id = $2', [newRole, id]);
+        return result.rowCount > 0;
     }
 
     static async incrementarCitasCompletadas(id_cliente) {
-        const [result] = await db.query(
-            'UPDATE usuarios SET citas_completadas = citas_completadas + 1 WHERE id = ?',
+        const result = await db.query(
+            'UPDATE usuarios SET citas_completadas = citas_completadas + 1 WHERE id = $1',
             [id_cliente]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 
     static async getAllUsersWithBarberInfo() {
-        const [users] = await db.query(`
+        const result = await db.query(`
             SELECT
                 u.id, u.name, u.lastname, u.correo, u.role, u.citas_completadas, u.google_id, u.profile_picture_url,
                 b.id AS barbero_id, b.especialidad AS barbero_especialidad, b.foto_perfil_url AS barbero_foto
@@ -115,39 +114,39 @@ class Usuario {
             LEFT JOIN barberos b ON u.id = b.id_usuario
             ORDER BY u.id ASC
         `);
-        return users;
+        return result.rows;
     }
 
     static async updatePassword(id, newHashedPassword) {
-        const [result] = await db.query(
-            'UPDATE usuarios SET password = ? WHERE id = ?',
+        const result = await db.query(
+            'UPDATE usuarios SET password = $1 WHERE id = $2',
             [newHashedPassword, id]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 
     static async setResetToken(id, token, expires) {
-        const [result] = await db.query(
-            'UPDATE usuarios SET resetPasswordToken = ?, resetPasswordExpires = ? WHERE id = ?',
+        const result = await db.query(
+            'UPDATE usuarios SET resetPasswordToken = $1, resetPasswordExpires = $2 WHERE id = $3',
             [token, expires, id]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 
     static async findByResetToken(token) {
-        const [rows] = await db.query(
-            'SELECT * FROM usuarios WHERE resetPasswordToken = ? AND resetPasswordExpires > ?',
-            [token, new Date()]
+        const result = await db.query(
+            'SELECT * FROM usuarios WHERE resetPasswordToken = $1 AND resetPasswordExpires > NOW()',
+            [token]
         );
-        return rows[0];
+        return result.rows[0];
     }
 
     static async clearResetToken(id) {
-        const [result] = await db.query(
-            'UPDATE usuarios SET resetPasswordToken = NULL, resetPasswordExpires = NULL WHERE id = ?',
+        const result = await db.query(
+            'UPDATE usuarios SET resetPasswordToken = NULL, resetPasswordExpires = NULL WHERE id = $1',
             [id]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 }
 

@@ -1,31 +1,32 @@
-const db = require('../config/db');
+const dbBarbero = require('../config/db');
 
 class Barbero {
     static async create({ id_usuario, nombre, apellido, especialidad, foto_perfil_url = null }) {
-        const [result] = await db.query(
-            'INSERT INTO barberos (id_usuario, nombre, apellido, especialidad, foto_perfil_url) VALUES (?, ?, ?, ?, ?)',
+        const result = await dbBarbero.query(
+            'INSERT INTO barberos (id_usuario, nombre, apellido, especialidad, foto_perfil_url) VALUES ($1, $2, $3, $4, $5) RETURNING id',
             [id_usuario, nombre, apellido, especialidad, foto_perfil_url]
         );
-        return { id: result.insertId, id_usuario, nombre, apellido, especialidad, foto_perfil_url };
+        // Usa 'result.rows[0].id' para obtener el ID de la nueva fila en pg
+        return { id: result.rows[0].id, id_usuario, nombre, apellido, especialidad, foto_perfil_url };
     }
 
     static async getById(id) {
-        const [rows] = await db.query('SELECT * FROM barberos WHERE id = ?', [id]);
-        return rows[0];
+        const result = await dbBarbero.query('SELECT * FROM barberos WHERE id = $1', [id]);
+        return result.rows[0];
     }
 
     static async getByUserId(id_usuario) {
-        const [rows] = await db.query('SELECT * FROM barberos WHERE id_usuario = ?', [id_usuario]);
-        return rows[0];
+        const result = await dbBarbero.query('SELECT * FROM barberos WHERE id_usuario = $1', [id_usuario]);
+        return result.rows[0];
     }
 
     static async getAll() {
-        const [barberos] = await db.query('SELECT * FROM barberos');
-        return barberos;
+        const result = await dbBarbero.query('SELECT * FROM barberos');
+        return result.rows;
     }
 
     static async getAllBarbersWithUserDetails() {
-        const [rows] = await db.query(`
+        const result = await dbBarbero.query(`
             SELECT
                 b.id AS id_barbero,
                 u.id AS id_usuario,
@@ -34,42 +35,43 @@ class Barbero {
                 u.correo,
                 b.especialidad,
                 b.foto_perfil_url,
-                b.descripcion // AÑADIR ESTO: Campo de descripción
+                b.descripcion
             FROM barberos b
             JOIN usuarios u ON b.id_usuario = u.id
             ORDER BY u.name ASC
         `);
-        return rows;
+        return result.rows;
     }
 
     static async deleteBarbero(id) {
-        const [result] = await db.query('DELETE FROM barberos WHERE id = ?', [id]);
-        return result.affectedRows > 0;
+        const result = await dbBarbero.query('DELETE FROM barberos WHERE id = $1', [id]);
+        return result.rowCount > 0;
     }
 
     static async updateBarbero(id, { nombre, apellido, especialidad, foto_perfil_url, descripcion }) {
         let query = 'UPDATE barberos SET ';
         const params = [];
         const updates = [];
+        let paramCount = 1;
 
         if (nombre !== undefined) {
-            updates.push('nombre = ?');
+            updates.push(`nombre = $${paramCount++}`);
             params.push(nombre);
         }
         if (apellido !== undefined) {
-            updates.push('apellido = ?');
+            updates.push(`apellido = $${paramCount++}`);
             params.push(apellido);
         }
         if (especialidad !== undefined) {
-            updates.push('especialidad = ?');
+            updates.push(`especialidad = $${paramCount++}`);
             params.push(especialidad);
         }
         if (foto_perfil_url !== undefined) {
-            updates.push('foto_perfil_url = ?');
+            updates.push(`foto_perfil_url = $${paramCount++}`);
             params.push(foto_perfil_url);
         }
         if (descripcion !== undefined) { 
-            updates.push('descripcion = ?');
+            updates.push(`descripcion = $${paramCount++}`);
             params.push(descripcion);
         }
 
@@ -77,41 +79,40 @@ class Barbero {
             return false; 
         }
 
-        query += updates.join(', ') + ' WHERE id = ?';
+        query += updates.join(', ') + ` WHERE id = $${paramCount}`;
         params.push(id);
 
-        const [result] = await db.query(query, params);
-        return result.affectedRows > 0;
+        const result = await dbBarbero.query(query, params);
+        return result.rowCount > 0;
     }
 
-    // Nuevo método para agregar un horario no disponible
     static async addUnavailableTime({ id_barbero, fecha, hora_inicio = null, hora_fin = null, motivo = null }) {
-        const [result] = await db.query(
-            'INSERT INTO horarios_no_disponibles_barberos (id_barbero, fecha, hora_inicio, hora_fin, motivo) VALUES (?, ?, ?, ?, ?)',
+        const result = await dbBarbero.query(
+            'INSERT INTO horarios_no_disponibles_barberos (id_barbero, fecha, hora_inicio, hora_fin, motivo) VALUES ($1, $2, $3, $4, $5) RETURNING id',
             [id_barbero, fecha, hora_inicio, hora_fin, motivo]
         );
-        return { id: result.insertId, id_barbero, fecha, hora_inicio, hora_fin, motivo };
+        return { id: result.rows[0].id, id_barbero, fecha, hora_inicio, hora_fin, motivo };
     }
 
     static async getUnavailableTimesByBarberoAndDate(id_barbero, fecha) {
-        const [rows] = await db.query(
-            'SELECT * FROM horarios_no_disponibles_barberos WHERE id_barbero = ? AND fecha = ?',
+        const result = await dbBarbero.query(
+            'SELECT * FROM horarios_no_disponibles_barberos WHERE id_barbero = $1 AND fecha = $2',
             [id_barbero, fecha]
         );
-        return rows;
+        return result.rows;
     }
 
     static async deleteUnavailableTime(id) {
-        const [result] = await db.query(
-            'DELETE FROM horarios_no_disponibles_barberos WHERE id = ?',
+        const result = await dbBarbero.query(
+            'DELETE FROM horarios_no_disponibles_barberos WHERE id = $1',
             [id]
         );
-        return result.affectedRows > 0;
+        return result.rowCount > 0;
     }
 
     static async getUnavailableTimeById(id) {
-        const [rows] = await db.query('SELECT * FROM horarios_no_disponibles_barberos WHERE id = ?', [id]);
-        return rows[0];
+        const result = await dbBarbero.query('SELECT * FROM horarios_no_disponibles_barberos WHERE id = $1', [id]);
+        return result.rows[0];
     }
 }
 

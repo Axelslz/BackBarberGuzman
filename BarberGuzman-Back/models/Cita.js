@@ -1,24 +1,24 @@
-const db = require('../config/db'); 
+const dbCita = require('../config/db'); 
 
 class Cita {
     static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
-        const [result] = await db.query(
-            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        const result = await dbCita.query(
+            'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
             [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente', nombre_cliente]
         );
-        return { id: result.insertId, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0, nombre_cliente };
+        return { id: result.rows[0].id, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0, nombre_cliente };
     }
 
     static async getCitasByBarberoAndDate(idBarbero, fecha) {
         try {
-            const [rows] = await db.query(
+            const result = await dbCita.query(
                 `SELECT c.*, u.name as cliente_name, u.lastname as cliente_lastname
                  FROM citas c
                  JOIN usuarios u ON c.id_cliente = u.id
-                 WHERE c.id_barbero = ? AND c.fecha_cita = ? AND c.estado NOT IN ("cancelada", "completada")`,
+                 WHERE c.id_barbero = $1 AND c.fecha_cita = $2 AND c.estado NOT IN ('cancelada', 'completada')`,
                 [idBarbero, fecha]
             );
-            return rows;
+            return result.rows;
         } catch (error) {
             console.error('Error al obtener citas por barbero y fecha:', error);
             throw error;
@@ -26,52 +26,53 @@ class Cita {
     }
 
     static async getById(id) {
-        const [rows] = await db.query('SELECT * FROM citas WHERE id = ?', [id]);
-        return rows[0];
+        const result = await dbCita.query('SELECT * FROM citas WHERE id = $1', [id]);
+        return result.rows[0];
     }
 
     static async update(id, data) { 
-        const fields = Object.keys(data).map(key => `${key} = ?`).join(', ');
+        const fields = Object.keys(data).map((key, index) => `${key} = $${index + 1}`).join(', ');
         const values = Object.values(data);
         values.push(id); 
 
-        const [result] = await db.query(`UPDATE citas SET ${fields} WHERE id = ?`, values);
-        return result.affectedRows > 0;
+        const result = await dbCita.query(`UPDATE citas SET ${fields} WHERE id = $${values.length}`, values);
+        return result.rowCount > 0;
     }
 
-
     static async actualizarEstado(id, nuevoEstado) {
-        const [result] = await db.query('UPDATE citas SET estado = ? WHERE id = ?', [nuevoEstado, id]);
-        return result.affectedRows > 0;
+        const result = await dbCita.query('UPDATE citas SET estado = $1 WHERE id = $2', [nuevoEstado, id]);
+        return result.rowCount > 0;
     }
 
     static async cancelarCita(id_cita) {
-        const [result] = await db.query('UPDATE citas SET estado = "cancelada" WHERE id = ?', [id_cita]);
-        return result.affectedRows > 0;
+        const result = await dbCita.query('UPDATE citas SET estado = \'cancelada\' WHERE id = $1', [id_cita]);
+        return result.rowCount > 0;
     }
 
     static async getCitaByIdWithCountStatus(id) {
-        const [rows] = await db.query('SELECT c.*, u.id as id_cliente FROM citas c JOIN usuarios u ON c.id_cliente = u.id WHERE c.id = ?', [id]);
-        return rows;
+        const result = await dbCita.query('SELECT c.*, u.id as id_cliente FROM citas c JOIN usuarios u ON c.id_cliente = u.id WHERE c.id = $1', [id]);
+        return result.rows;
     }
 
     static async marcarContadorActualizado(id) {
-        const [result] = await db.query('UPDATE citas SET contador_actualizado = 1 WHERE id = ?', [id]);
-        return result.affectedRows > 0;
+        const result = await dbCita.query('UPDATE citas SET contador_actualizado = 1 WHERE id = $1', [id]);
+        return result.rowCount > 0;
     }
 
     static async getAppointments(whereClause = '', params = []) {
-        const [rows] = await db.query(`
+        const result = await dbCita.query(`
             SELECT
                 c.id,
                 c.fecha_cita,
                 c.hora_inicio,
-                DATE_ADD(CONCAT(c.fecha_cita, ' ', c.hora_inicio), INTERVAL c.duracion_minutos MINUTE) AS hora_fin,
+                -- En PostgreSQL, se usa una sintaxis diferente para sumar intervalos de tiempo
+                (c.fecha_cita::timestamp + c.hora_inicio::time + (c.duracion_minutos * interval '1 minute')) AS hora_fin,
                 c.estado,
                 c.duracion_minutos,
                 c.id_cliente,
                 c.id_barbero,
                 c.id_servicio,
+                -- En PostgreSQL, se usa COALESCE para la primera expresión no nula y || para concatenar strings
                 COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname)) AS cliente_nombre,
                 u_cliente.name AS cliente_name,
                 u_cliente.lastname AS cliente_lastname,
@@ -87,7 +88,7 @@ class Cita {
             ${whereClause}
             ORDER BY c.fecha_cita DESC, c.hora_inicio DESC
         `, params);
-        return rows;
+        return result.rows;
     }
 
     static async getAll() { 
@@ -95,13 +96,13 @@ class Cita {
     }
 
     static async getAppointmentsByUserId(userId) { 
-        let whereClause = 'WHERE c.id_cliente = ?';
+        let whereClause = 'WHERE c.id_cliente = $1';
         let params = [userId];
         return this.getAppointments(whereClause, params);
     }
 
     static async getAppointmentsByBarberId(barberId) { 
-        let whereClause = 'WHERE c.id_barbero = ?';
+        let whereClause = 'WHERE c.id_barbero = $1';
         let params = [barberId];
         return this.getAppointments(whereClause, params);
     }
