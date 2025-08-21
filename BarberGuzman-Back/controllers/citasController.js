@@ -6,13 +6,13 @@ const moment = require('moment');
 require('moment/locale/es');
 
 const WORK_HOURS = {
-    'lunes': { start: '10:00', end: '21:00' },
-    'martes': { start: '10:00', end: '21:00' },
-    'miércoles': { start: '10:00', end: '21:00' },
-    'jueves': { start: '10:00', end: '21:00' },
-    'viernes': { start: '10:00', end: '21:00' },
-    'sábado': { start: '09:00', end: '19:00' },
-    'domingo': { start: '09:00', end: '17:00' },
+    'lunes': { start: '10:00', end: '20:00' },
+    'martes': { start: '10:00', end: '20:00' },
+    'miércoles': { start: '10:00', end: '20:00' },
+    'jueves': { start: '10:00', end: '20:00' },
+    'viernes': { start: '10:00', end: '20:00' },
+    'sábado': { start: '09:00', end: '18:00' },
+    'domingo': { start: '09:00', end: '15:00' },
 };
 
 function generateTimeSlots(start, end, intervalMinutes = 60) {
@@ -297,11 +297,10 @@ exports.crearCita = async (req, res, next) => {
         }
 
         const duracion_minutos = servicio.duracion_minutos || 60;
-
         const dayKey = moment(fecha_cita).locale('es').format('dddd').toLowerCase();
 
         if (!WORK_HOURS[dayKey]) {
-            return res.status(400).json({ message: 'Día de la semana no válido o sin horario definido para el barbero.' });
+            return res.status(400).json({ message: 'Día de la semana no válido o sin horario definido.' });
         }
 
         const { start, end } = WORK_HOURS[dayKey];
@@ -309,7 +308,7 @@ exports.crearCita = async (req, res, next) => {
         const workingStartTime = moment(`${fecha_cita} ${start}`);
         const workingEndTime = moment(`${fecha_cita} ${end}`);
 
-        if (requestedStartTime.isBefore(workingStartTime) || requestedStartTime.isSameOrAfter(workingEndTime)) {
+        if (requestedStartTime.isBefore(workingStartTime) || requestedStartTime.isAfter(workingEndTime)) {
             return res.status(400).json({ message: 'La hora solicitada está fuera del horario de trabajo del barbero.' });
         }
 
@@ -317,14 +316,11 @@ exports.crearCita = async (req, res, next) => {
 
         if (newAppointmentEnd.isAfter(workingEndTime)) {
             const lastHourStart = workingEndTime.clone().subtract(60, 'minutes');
-            
             if (requestedStartTime.isBefore(lastHourStart)) {
                 return res.status(400).json({ message: 'La duración del servicio excede el horario de trabajo del barbero.' });
             }
-            
         }
-        
-
+    
         const citasExistentes = await Cita.getCitasByBarberoAndDate(id_barbero, fecha_cita);
         const horariosNoDisponibles = await Barbero.getUnavailableTimesByBarberoAndDate(id_barbero, fecha_cita);
 
@@ -368,9 +364,6 @@ exports.crearCita = async (req, res, next) => {
         });
 
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(409).json({ message: 'La hora seleccionada ya está ocupada. Por favor, elige otro horario.' });
-        }
         console.error('Error al crear cita:', error);
         next(error);
     }
