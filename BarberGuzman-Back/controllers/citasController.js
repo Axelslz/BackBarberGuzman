@@ -46,12 +46,11 @@ exports.getDisponibilidadBarbero = async (req, res, next) => {
         if (!WORK_HOURS[dayKey]) {
             return res.status(200).json({ disponibilidad: [], message: `El barbero no trabaja los ${dayKey}.` });
         }
-
+        
         const todosLosServicios = await Servicio.getAll();
         if (todosLosServicios.length === 0) {
             return res.status(200).json({ disponibilidad: [], message: 'No hay servicios configurados.' });
         }
-
         const intervaloMinimo = Math.min(...todosLosServicios.map(s => s.duracion_minutos));
 
         const { start, end } = WORK_HOURS[dayKey];
@@ -60,7 +59,6 @@ exports.getDisponibilidadBarbero = async (req, res, next) => {
 
         const citasOcupadas = await Cita.getCitasByBarberoAndDate(idBarbero, fecha);
         const horariosBloqueados = await Barbero.getUnavailableTimesByBarberoAndDate(idBarbero, fecha);
-
         let todosLosBloqueos = [];
 
         citasOcupadas.forEach(cita => {
@@ -68,47 +66,41 @@ exports.getDisponibilidadBarbero = async (req, res, next) => {
                 start: moment(`${fecha} ${cita.hora_inicio}`),
                 end: moment(`${fecha} ${cita.hora_fin}`),
                 type: 'cita',
-                details: {
-                    cita_id: cita.id,
-                    cliente_nombre: `${cita.cliente_name} ${cita.cliente_lastname}`
-                }
+                details: { cita_id: cita.id, cliente_nombre: `${cita.cliente_name} ${cita.cliente_lastname}` }
             });
         });
 
         horariosBloqueados.forEach(bloqueo => {
-            
             if (bloqueo.hora_inicio === null && bloqueo.hora_fin === null) {
-                todosLosBloqueos.push({ start: inicioJornada, end: finJornada, type: 'bloqueo' });
+                todosLosBloqueos.push({ start: inicioJornada.clone(), end: finJornada.clone(), type: 'bloqueo' });
             } else {
-                 todosLosBloqueos.push({
+                todosLosBloqueos.push({
                     start: moment(`${fecha} ${bloqueo.hora_inicio}`),
                     end: moment(`${fecha} ${bloqueo.hora_fin}`),
                     type: 'bloqueo'
                 });
             }
         });
-
+        
         todosLosBloqueos.sort((a, b) => a.start.valueOf() - b.start.valueOf());
 
-        const disponibilidad = [];
+        let agendaCompleta = [];
+
+        todosLosBloqueos.forEach(bloqueo => {
+            agendaCompleta.push({
+                hora_inicio_24h: bloqueo.start.format('HH:mm'),
+                hora_inicio: bloqueo.start.format('h:mm A'),
+                disponible: false,
+                cita_id: bloqueo.type === 'cita' ? bloqueo.details.cita_id : null,
+                cliente_nombre: bloqueo.type === 'cita' ? bloqueo.details.cliente_nombre : null
+            });
+        });
+
         let tiempoActual = inicioJornada.clone();
 
-        while (tiempoActual.isBefore(finJornada)) {
-            let estaEnBloqueo = false;
-            let finDelBloqueoActual = null;
-
-            for (const bloqueo of todosLosBloqueos) {
-                if (tiempoActual.isBetween(bloqueo.start, bloqueo.end, undefined, '[)')) {
-                    estaEnBloqueo = true;
-                    finDelBloqueoActual = bloqueo.end.clone();
-                    break;
-                }
-            }
-
-            if (estaEnBloqueo) {
-                tiempoActual = finDelBloqueoActual;
-            } else {
-                disponibilidad.push({
+        todosLosBloqueos.forEach(bloqueo => {
+            while (tiempoActual.isBefore(bloqueo.start)) {
+                agendaCompleta.push({
                     hora_inicio_24h: tiempoActual.format('HH:mm'),
                     hora_inicio: tiempoActual.format('h:mm A'),
                     disponible: true,
@@ -117,12 +109,29 @@ exports.getDisponibilidadBarbero = async (req, res, next) => {
                 });
                 tiempoActual.add(intervaloMinimo, 'minutes');
             }
+ 
+            if (tiempoActual.isBefore(bloqueo.end)) {
+                tiempoActual = bloqueo.end.clone();
+            }
+        });
+
+        while (tiempoActual.isBefore(finJornada)) {
+            agendaCompleta.push({
+                hora_inicio_24h: tiempoActual.format('HH:mm'),
+                hora_inicio: tiempoActual.format('h:mm A'),
+                disponible: true,
+                cita_id: null,
+                cliente_nombre: null
+            });
+            tiempoActual.add(intervaloMinimo, 'minutes');
         }
-        
+
+        agendaCompleta.sort((a, b) => moment(a.hora_inicio_24h, 'HH:mm').valueOf() - moment(b.hora_inicio_24h, 'HH:mm').valueOf());
+
         res.status(200).json({
             barbero: { id: barbero.id, nombre: barbero.nombre, apellido: barbero.apellido },
             fecha: fecha,
-            disponibilidad: disponibilidad,
+            disponibilidad: agendaCompleta,
             horariosNoDisponibles: horariosBloqueados 
         });
 
