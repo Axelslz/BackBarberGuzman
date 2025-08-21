@@ -41,70 +41,89 @@ exports.getDisponibilidadBarbero = async (req, res, next) => {
         }
 
         const dateMoment = moment(fecha);
-        if (!dateMoment.isValid()) {
-            return res.status(400).json({ message: 'Formato de fecha inválido. Use AAAA-MM-DD.' });
-        }
-
         const dayKey = dateMoment.locale('es').format('dddd').toLowerCase();
 
         if (!WORK_HOURS[dayKey]) {
-            return res.status(200).json({
-                barbero: { id: barbero.id, nombre: barbero.nombre, apellido: barbero.apellido },
-                fecha: fecha,
-                disponibilidad: [],
-                horariosNoDisponibles: [],
-                message: `El barbero no tiene horario definido para el día "${dayKey}".`
-            });
+            return res.status(200).json({ disponibilidad: [], message: `El barbero no trabaja los ${dayKey}.` });
         }
 
+        const todosLosServicios = await Servicio.getAll();
+        if (todosLosServicios.length === 0) {
+            return res.status(200).json({ disponibilidad: [], message: 'No hay servicios configurados.' });
+        }
+
+        const intervaloMinimo = Math.min(...todosLosServicios.map(s => s.duracion_minutos));
+
         const { start, end } = WORK_HOURS[dayKey];
-        let allPossibleSlots_24h = generateTimeSlots(start, end, 60);
+        const inicioJornada = moment(`${fecha} ${start}`);
+        const finJornada = moment(`${fecha} ${end}`);
 
         const citasOcupadas = await Cita.getCitasByBarberoAndDate(idBarbero, fecha);
-        const horariosNoDisponibles = await Barbero.getUnavailableTimesByBarberoAndDate(idBarbero, fecha);
+        const horariosBloqueados = await Barbero.getUnavailableTimesByBarberoAndDate(idBarbero, fecha);
 
-        const availability = allPossibleSlots_24h.map(slot24h => {
-            const slotMoment = moment(slot24h, 'HH:mm');
-            const slotEndMoment = slotMoment.clone().add(60, 'minutes');
+        let todosLosBloqueos = [];
 
-            let isOccupiedByCita = false;
-            let citaDetails = null;
-
-            citasOcupadas.forEach(cita => {
-                const citaStart = moment(cita.hora_inicio, 'HH:mm:ss');
-                const citaEnd = moment(cita.hora_fin, 'HH:mm:ss');
-                if (slotMoment.isBefore(citaEnd) && slotEndMoment.isAfter(citaStart)) {
-                    isOccupiedByCita = true;
-                    citaDetails = {
-                        cita_id: cita.id,
-                        cliente_nombre: `${cita.cliente_name} ${cita.cliente_lastname}`
-                    };
+        citasOcupadas.forEach(cita => {
+            todosLosBloqueos.push({
+                start: moment(`${fecha} ${cita.hora_inicio}`),
+                end: moment(`${fecha} ${cita.hora_fin}`),
+                type: 'cita',
+                details: {
+                    cita_id: cita.id,
+                    cliente_nombre: `${cita.cliente_name} ${cita.cliente_lastname}`
                 }
             });
-
-            const isBlockedByBarber = horariosNoDisponibles.some(block => {
-                if (block.hora_inicio === null && block.hora_fin === null) {
-                    return true;
-                }
-                const blockStart = moment(block.hora_inicio, 'HH:mm:ss');
-                const blockEnd = moment(block.hora_fin, 'HH:mm:ss');
-                return (slotMoment.isBefore(blockEnd) && slotEndMoment.isAfter(blockStart));
-            });
-
-            return {
-                hora_inicio_24h: slot24h,
-                hora_inicio: slotMoment.format('h:mm A'),
-                disponible: !(isOccupiedByCita || isBlockedByBarber),
-                cita_id: citaDetails ? citaDetails.cita_id : null,
-                cliente_nombre: citaDetails ? citaDetails.cliente_nombre : null
-            };
         });
 
+        horariosBloqueados.forEach(bloqueo => {
+            
+            if (bloqueo.hora_inicio === null && bloqueo.hora_fin === null) {
+                todosLosBloqueos.push({ start: inicioJornada, end: finJornada, type: 'bloqueo' });
+            } else {
+                 todosLosBloqueos.push({
+                    start: moment(`${fecha} ${bloqueo.hora_inicio}`),
+                    end: moment(`${fecha} ${bloqueo.hora_fin}`),
+                    type: 'bloqueo'
+                });
+            }
+        });
+
+        todosLosBloqueos.sort((a, b) => a.start.valueOf() - b.start.valueOf());
+
+        const disponibilidad = [];
+        let tiempoActual = inicioJornada.clone();
+
+        while (tiempoActual.isBefore(finJornada)) {
+            let estaEnBloqueo = false;
+            let finDelBloqueoActual = null;
+
+            for (const bloqueo of todosLosBloqueos) {
+                if (tiempoActual.isBetween(bloqueo.start, bloqueo.end, undefined, '[)')) {
+                    estaEnBloqueo = true;
+                    finDelBloqueoActual = bloqueo.end.clone();
+                    break;
+                }
+            }
+
+            if (estaEnBloqueo) {
+                tiempoActual = finDelBloqueoActual;
+            } else {
+                disponibilidad.push({
+                    hora_inicio_24h: tiempoActual.format('HH:mm'),
+                    hora_inicio: tiempoActual.format('h:mm A'),
+                    disponible: true,
+                    cita_id: null,
+                    cliente_nombre: null
+                });
+                tiempoActual.add(intervaloMinimo, 'minutes');
+            }
+        }
+        
         res.status(200).json({
             barbero: { id: barbero.id, nombre: barbero.nombre, apellido: barbero.apellido },
             fecha: fecha,
-            disponibilidad: availability,
-            horariosNoDisponibles: horariosNoDisponibles
+            disponibilidad: disponibilidad,
+            horariosNoDisponibles: horariosBloqueados 
         });
 
     } catch (error) {
