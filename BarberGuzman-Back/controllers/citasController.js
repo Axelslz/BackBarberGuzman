@@ -285,10 +285,6 @@ exports.cancelarCita = async (req, res, next) => {
 
 exports.crearCita = async (req, res, next) => {
     try {
-
-        console.log('Contenido de req.body en crearCita:', req.body); // Agrega esta línea
-        console.log('Contenido de req.user en crearCita:', req.user);
-        
         const { id_barbero, fecha_cita, hora_inicio, id_servicio, id_cliente, nombre_cliente } = req.body;
 
         if (!id_barbero || !fecha_cita || !hora_inicio || !id_servicio || !id_cliente) {
@@ -302,39 +298,40 @@ exports.crearCita = async (req, res, next) => {
 
         const duracion_minutos = servicio.duracion_minutos || 60;
 
-        const dayOfWeek = moment(fecha_cita).locale('es').format('dddd').toLowerCase();
-        const dayKey = dayOfWeek;
+        const dayKey = moment(fecha_cita).locale('es').format('dddd').toLowerCase();
 
         if (!WORK_HOURS[dayKey]) {
             return res.status(400).json({ message: 'Día de la semana no válido o sin horario definido para el barbero.' });
         }
 
         const { start, end } = WORK_HOURS[dayKey];
+        const requestedStartTime = moment(`${fecha_cita} ${hora_inicio}`);
+        const workingStartTime = moment(`${fecha_cita} ${start}`);
+        const workingEndTime = moment(`${fecha_cita} ${end}`);
 
-        const requestedStartTime = moment(hora_inicio, 'HH:mm');
-
-        const workingStartTime = moment(start, 'HH:mm');
-        const workingEndTime = moment(end, 'HH:mm');
-
-        if (requestedStartTime.isBefore(workingStartTime) || requestedStartTime.isAfter(workingEndTime)) {
+        if (requestedStartTime.isBefore(workingStartTime) || requestedStartTime.isSameOrAfter(workingEndTime)) {
             return res.status(400).json({ message: 'La hora solicitada está fuera del horario de trabajo del barbero.' });
         }
 
         const newAppointmentEnd = requestedStartTime.clone().add(duracion_minutos, 'minutes');
 
         if (newAppointmentEnd.isAfter(workingEndTime)) {
-            return res.status(400).json({ message: 'La duración del servicio excede el horario de trabajo del barbero.' });
+            const lastHourStart = workingEndTime.clone().subtract(60, 'minutes');
+            
+            if (requestedStartTime.isBefore(lastHourStart)) {
+                return res.status(400).json({ message: 'La duración del servicio excede el horario de trabajo del barbero.' });
+            }
+            
         }
+        
 
         const citasExistentes = await Cita.getCitasByBarberoAndDate(id_barbero, fecha_cita);
         const horariosNoDisponibles = await Barbero.getUnavailableTimesByBarberoAndDate(id_barbero, fecha_cita);
 
-
         const isOverlapCita = citasExistentes.some(cita => {
-            const existingStart = moment(cita.hora_inicio, 'HH:mm:ss');
-            const existingEnd = moment(cita.hora_fin, 'HH:mm:ss');
-
-            return (requestedStartTime.isBefore(existingEnd) && newAppointmentEnd.isAfter(existingStart));
+            const existingStart = moment(`${fecha_cita} ${cita.hora_inicio}`);
+            const existingEnd = moment(`${fecha_cita} ${cita.hora_fin}`);
+            return requestedStartTime.isBefore(existingEnd) && newAppointmentEnd.isAfter(existingStart);
         });
 
         if (isOverlapCita) {
@@ -342,12 +339,10 @@ exports.crearCita = async (req, res, next) => {
         }
 
         const isOverlapBlocked = horariosNoDisponibles.some(block => {
-            if (block.hora_inicio === null && block.hora_fin === null) {
-                return true;
-            }
-            const blockStart = moment(block.hora_inicio, 'HH:mm:ss');
-            const blockEnd = moment(block.hora_fin, 'HH:mm:ss');
-            return (requestedStartTime.isBefore(blockEnd) && newAppointmentEnd.isAfter(blockStart));
+            if (block.hora_inicio === null && block.hora_fin === null) return true;
+            const blockStart = moment(`${fecha_cita} ${block.hora_inicio}`);
+            const blockEnd = moment(`${fecha_cita} ${block.hora_fin}`);
+            return requestedStartTime.isBefore(blockEnd) && newAppointmentEnd.isAfter(blockStart);
         });
 
         if (isOverlapBlocked) {
