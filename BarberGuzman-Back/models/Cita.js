@@ -21,7 +21,7 @@ class Cita {
         return result.rows;
     }
 
-    
+
     static async getById(id) {
         const result = await db.query('SELECT * FROM citas WHERE id = $1', [id]);
         return result.rows[0];
@@ -44,19 +44,22 @@ class Cita {
         return result.rowCount > 0;
     }
     
-    static async getAppointments(whereClause = '', params = []) {
+    static async getAppointments(baseWhereClause = '', params = [], dateRange = {}) {
         try {
-            const result = await db.query(`
+            let whereClause = baseWhereClause;
+            let queryParams = [...params];
+
+            // Añadimos el filtro de fecha si se proporciona
+            if (dateRange.startDate && dateRange.endDate) {
+                whereClause += whereClause ? ' AND' : 'WHERE';
+                whereClause += ` c.fecha_cita BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`;
+                queryParams.push(dateRange.startDate, dateRange.endDate);
+            }
+
+            const query = `
                 SELECT
-                    c.id,
-                    c.fecha_cita,
-                    c.hora_inicio,
-                    c.hora_fin,
-                    c.estado,
-                    c.duracion_minutos,
-                    c.id_cliente,
-                    c.id_barbero,
-                    c.id_servicio,
+                    c.id, c.fecha_cita, c.hora_inicio, c.hora_fin, c.estado,
+                    c.duracion_minutos, c.id_cliente, c.id_barbero, c.id_servicio,
                     COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname), 'Cliente Desconocido') AS cliente_nombre,
                     COALESCE(CONCAT(u_barbero.name, ' ', u_barbero.lastname), 'Barbero Desconocido') AS barbero_name,
                     COALESCE(s.nombre, 'Servicio Desconocido') AS servicio_nombre,
@@ -68,7 +71,9 @@ class Cita {
                 LEFT JOIN servicios s ON c.id_servicio = s.id
                 ${whereClause}
                 ORDER BY c.fecha_cita DESC, c.hora_inicio DESC
-            `, params);
+            `;
+            
+            const result = await db.query(query, queryParams);
             return result.rows;
         } catch (error) {
             console.error("ERROR EN LA CONSULTA SQL de getAppointments:", error);
@@ -76,20 +81,20 @@ class Cita {
         }
     }
 
-    static async getAll() { 
-        return this.getAppointments('', []);
+    static async getAll(dateRange = {}) { 
+        return this.getAppointments('', [], dateRange);
     }
 
-    static async getAppointmentsByUserId(userId) { 
+    static async getAppointmentsByUserId(userId, dateRange = {}) { 
         const whereClause = 'WHERE c.id_cliente = $1';
         const params = [userId];
-        return this.getAppointments(whereClause, params);
+        return this.getAppointments(whereClause, params, dateRange);
     }
 
-    static async getAppointmentsByBarberId(barberId) { 
+    static async getAppointmentsByBarberId(barberId, dateRange = {}) { 
         const whereClause = 'WHERE c.id_barbero = $1';
         const params = [barberId];
-        return this.getAppointments(whereClause, params);
+        return this.getAppointments(whereClause, params, dateRange);
     }
 }
 

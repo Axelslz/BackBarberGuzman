@@ -371,15 +371,18 @@ exports.crearCita = async (req, res, next) => {
 
 exports.getHistorialCitas = async (req, res, next) => {
     try {
-        const { role, id: userId, id_barbero: userBarberId } = req.user;
+        const { role, id: userId, id_barbero: userBarberoId } = req.user;
+        const { startDate, endDate } = req.query; // Leemos las fechas del query
         let citas;
 
+        const dateRange = { startDate, endDate };
+
         if (role === 'cliente') {
-            citas = await Cita.getAppointmentsByUserId(userId); 
-        } else if (role === 'barber') {
-            citas = await Cita.getAppointmentsByBarberId(userBarberId); 
-        } else if (role === 'admin' || role === 'super_admin') {
-            citas = await Cita.getAll();
+            citas = await Cita.getAppointmentsByUserId(userId, dateRange); 
+        } else if (role === 'admin' && userBarberoId) { // 'admin' es un barbero específico
+            citas = await Cita.getAppointmentsByBarberId(userBarberoId, dateRange); 
+        } else if (role === 'super_admin') { // 'super_admin' puede ver todo
+            citas = await Cita.getAll(dateRange);
         } else {
             return res.status(403).json({ message: 'No tienes permiso para ver el historial de citas.' });
         }
