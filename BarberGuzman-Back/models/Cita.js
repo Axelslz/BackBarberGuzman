@@ -1,7 +1,7 @@
 const db = require('../config/db'); 
 
 class Cita {
-    static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
+     static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
         const finalNombreCliente = nombre_cliente ? nombre_cliente : null;
         const result = await db.query(
             'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
@@ -15,7 +15,7 @@ class Cita {
             `SELECT c.*, u.name as cliente_name, u.lastname as cliente_lastname
              FROM citas c
              LEFT JOIN usuarios u ON c.id_cliente = u.id
-             WHERE c.id_barbero = $1 AND c.fecha_cita = $2 AND c.estado NOT IN ('cancelada', 'completada')`,
+             WHERE c.id_barbero = $1 AND c.fecha_cita = $2 AND c.estado NOT IN ('cancelada')`,
             [idBarbero, fecha]
         );
         return result.rows;
@@ -44,12 +44,11 @@ class Cita {
         return result.rowCount > 0;
     }
     
-    static async getAppointments(baseWhereClause = '', params = [], dateRange = {}) {
+     static async getAppointments(baseWhereClause = '', params = [], dateRange = {}) {
         try {
             let whereClause = baseWhereClause;
             let queryParams = [...params];
 
-            // Añadimos el filtro de fecha si se proporciona
             if (dateRange.startDate && dateRange.endDate) {
                 whereClause += whereClause ? ' AND' : 'WHERE';
                 whereClause += ` c.fecha_cita BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`;
