@@ -8,7 +8,7 @@ class Cita {
             'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
             [id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, 'pendiente', finalNombreCliente]
         );
-        return { id: result.rows[0].id, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', contador_actualizado: 0, nombre_cliente: finalNombreCliente };
+        return { id: result.rows[0].id, id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado: 'pendiente', nombre_cliente: finalNombreCliente };
     }
 
     static async getCitasByBarberoAndDate(idBarbero, fecha) {
@@ -67,15 +67,14 @@ class Cita {
                 c.id,
                 c.fecha_cita,
                 c.hora_inicio,
-                -- En PostgreSQL, se usa una sintaxis diferente para sumar intervalos de tiempo
                 (c.fecha_cita::timestamp + c.hora_inicio::time + (c.duracion_minutos * interval '1 minute')) AS hora_fin,
                 c.estado,
                 c.duracion_minutos,
                 c.id_cliente,
                 c.id_barbero,
                 c.id_servicio,
-                -- En PostgreSQL, se usa COALESCE para la primera expresión no nula y || para concatenar strings
-                CONCAT(u_cliente.name, ' ', u_cliente.lastname) AS cliente_nombre,
+                -- LÓGICA CORREGIDA: Usa el nombre manual si existe, si no, el del usuario.
+                COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname)) AS cliente_nombre,
                 u_cliente.name AS cliente_name,
                 u_cliente.lastname AS cliente_lastname,
                 u_barbero.name AS barbero_name,
@@ -83,7 +82,7 @@ class Cita {
                 s.nombre AS servicio_nombre,
                 s.precio AS servicio_precio
             FROM citas c
-            JOIN usuarios u_cliente ON c.id_cliente = u_cliente.id
+            LEFT JOIN usuarios u_cliente ON c.id_cliente = u_cliente.id
             JOIN barberos b ON c.id_barbero = b.id
             JOIN usuarios u_barbero ON b.id_usuario = u_barbero.id
             JOIN servicios s ON c.id_servicio = s.id
