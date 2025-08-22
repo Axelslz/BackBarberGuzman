@@ -73,13 +73,12 @@ async function initializeDatabase() {
             CREATE TABLE IF NOT EXISTS citas (
                 id SERIAL PRIMARY KEY,
                 id_cliente INT NOT NULL,
-                nombre_cliente VARCHAR(255) NULL,
+                nombre_cliente VARCHAR(255) NOT NULL,
                 id_barbero INT NOT NULL,
                 id_servicio INT NOT NULL,
                 fecha_cita DATE NOT NULL,
                 hora_inicio TIME NOT NULL,
                 hora_fin TIME NOT NULL,
-
                 estado VARCHAR(50) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'confirmada', 'cancelada', 'completada')),
                 duracion_minutos INT NOT NULL DEFAULT 60,
                 contador_actualizado BOOLEAN DEFAULT FALSE,
