@@ -73,7 +73,6 @@ class Cita {
                 c.id_cliente,
                 c.id_barbero,
                 c.id_servicio,
-                -- LÓGICA CORREGIDA: Usa el nombre manual si existe, si no, el del usuario.
                 COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname)) AS cliente_nombre,
                 u_cliente.name AS cliente_name,
                 u_cliente.lastname AS cliente_lastname,
@@ -82,10 +81,14 @@ class Cita {
                 s.nombre AS servicio_nombre,
                 s.precio AS servicio_precio
             FROM citas c
+            -- CAMBIO 1: JOIN a LEFT JOIN para no perder citas si el cliente se borra
             LEFT JOIN usuarios u_cliente ON c.id_cliente = u_cliente.id
-            JOIN barberos b ON c.id_barbero = b.id
-            JOIN usuarios u_barbero ON b.id_usuario = u_barbero.id
-            JOIN servicios s ON c.id_servicio = s.id
+            -- CAMBIO 2: JOIN a LEFT JOIN para no perder citas si el barbero se borra
+            LEFT JOIN barberos b ON c.id_barbero = b.id
+            -- CAMBIO 3: JOIN a LEFT JOIN para no perder citas si el usuario del barbero se borra
+            LEFT JOIN usuarios u_barbero ON b.id_usuario = u_barbero.id
+            -- CAMBIO 4: JOIN a LEFT JOIN para no perder citas si el servicio se borra
+            LEFT JOIN servicios s ON c.id_servicio = s.id
             ${whereClause}
             ORDER BY c.fecha_cita DESC, c.hora_inicio DESC
         `, params);
