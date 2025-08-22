@@ -44,15 +44,16 @@ class Cita {
         return result.rowCount > 0;
     }
     
-     static async getAppointments(baseWhereClause = '', params = [], dateRange = {}) {
+    static async getAppointments(baseWhereClause = '', params = [], filterParams = {}) {
         try {
             let whereClause = baseWhereClause;
             let queryParams = [...params];
 
-            if (dateRange.startDate && dateRange.endDate) {
+            // Nuevo filtro por mes y año
+            if (filterParams.month && filterParams.year) {
                 whereClause += whereClause ? ' AND' : 'WHERE';
-                whereClause += ` c.fecha_cita BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}`;
-                queryParams.push(dateRange.startDate, dateRange.endDate);
+                whereClause += ` EXTRACT(MONTH FROM c.fecha_cita) = $${queryParams.length + 1} AND EXTRACT(YEAR FROM c.fecha_cita) = $${queryParams.length + 2}`;
+                queryParams.push(filterParams.month, filterParams.year);
             }
 
             const query = `
@@ -80,20 +81,20 @@ class Cita {
         }
     }
 
-    static async getAll(dateRange = {}) { 
-        return this.getAppointments('', [], dateRange);
+    static async getAll(filterParams = {}) { 
+        return this.getAppointments('', [], filterParams);
     }
 
-    static async getAppointmentsByUserId(userId, dateRange = {}) { 
+    static async getAppointmentsByUserId(userId, filterParams = {}) { 
         const whereClause = 'WHERE c.id_cliente = $1';
         const params = [userId];
-        return this.getAppointments(whereClause, params, dateRange);
+        return this.getAppointments(whereClause, params, filterParams);
     }
 
-    static async getAppointmentsByBarberId(barberId, dateRange = {}) { 
+    static async getAppointmentsByBarberId(barberId, filterParams = {}) { 
         const whereClause = 'WHERE c.id_barbero = $1';
         const params = [barberId];
-        return this.getAppointments(whereClause, params, dateRange);
+        return this.getAppointments(whereClause, params, filterParams);
     }
 }
 
