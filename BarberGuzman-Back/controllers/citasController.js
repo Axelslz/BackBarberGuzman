@@ -374,18 +374,33 @@ exports.crearCita = async (req, res, next) => {
 exports.getHistorialCitas = async (req, res, next) => {
     try {
         const { role, id: userId, id_barbero: userBarberoId } = req.user;
-        const { selectedDate, filterType } = req.query; 
-        let citasDelMes;
+        const { selectedDate, filterType } = req.query;
+        let citas;
 
+        if (filterType === 'all') {
+            if (role === 'cliente') {
+                citas = await Cita.getAppointmentsByUserId(userId);
+            } else if (role === 'admin' && userBarberoId) {
+                citas = await Cita.getAppointmentsByBarberId(userBarberoId);
+            } else if (role === 'super_admin') {
+                citas = await Cita.getAll();
+            } else {
+                return res.status(200).json([]);
+            }
+            return res.status(200).json(citas);
+        }
+
+        // Lógica para los filtros que SÍ usan fecha (día, semana, mes)
         if (!selectedDate || !filterType) {
             return res.status(400).json({ message: 'Se requiere una fecha y un tipo de filtro.' });
         }
         
         const referenceDate = parseISO(selectedDate);
-        const month = referenceDate.getMonth() + 1; 
+        const month = referenceDate.getMonth() + 1; // getMonth() es 0-11
         const year = referenceDate.getFullYear();
         const filterParams = { month, year };
 
+        let citasDelMes;
         if (role === 'cliente') {
             citasDelMes = await Cita.getAppointmentsByUserId(userId, filterParams);
         } else if (role === 'admin' && userBarberoId) {
@@ -407,18 +422,15 @@ exports.getHistorialCitas = async (req, res, next) => {
                 citasFiltradas = citasDelMes.filter(cita => isWithinInterval(parseISO(cita.fecha_cita), { start, end }));
                 break;
             case 'month':
-                citasFiltradas = citasDelMes; 
+                citasFiltradas = citasDelMes; // Ya obtuvimos las del mes
                 break;
-            case 'all':
-              
-                 citasFiltradas = await Cita.getAll(); 
-                 break;
             default:
                 citasFiltradas = [];
                 break;
         }
 
         res.status(200).json(citasFiltradas);
+
     } catch (error) {
         console.error('Error al obtener historial de citas:', error);
         next(error);
