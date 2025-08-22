@@ -21,6 +21,7 @@ class Cita {
         return result.rows;
     }
 
+    
     static async getById(id) {
         const result = await db.query('SELECT * FROM citas WHERE id = $1', [id]);
         return result.rows[0];
