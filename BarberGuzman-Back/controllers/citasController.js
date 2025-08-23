@@ -375,9 +375,10 @@ exports.getHistorialCitas = async (req, res, next) => {
     try {
         const { role, id: userId, id_barbero: userBarberoId } = req.user;
         const { selectedDate, filterType } = req.query;
-        let citas;
-
+        
+        // Lógica para el filtro "TODO" que no necesita fecha
         if (filterType === 'all') {
+            let citas;
             if (role === 'cliente') {
                 citas = await Cita.getAppointmentsByUserId(userId);
             } else if (role === 'admin' && userBarberoId) {
@@ -385,18 +386,18 @@ exports.getHistorialCitas = async (req, res, next) => {
             } else if (role === 'super_admin') {
                 citas = await Cita.getAll();
             } else {
-                return res.status(200).json([]);
+                citas = [];
             }
             return res.status(200).json(citas);
         }
 
-        // Lógica para los filtros que SÍ usan fecha (día, semana, mes)
+        // Validación para los filtros que SÍ necesitan fecha
         if (!selectedDate || !filterType) {
             return res.status(400).json({ message: 'Se requiere una fecha y un tipo de filtro.' });
         }
         
         const referenceDate = parseISO(selectedDate);
-        const month = referenceDate.getMonth() + 1; // getMonth() es 0-11
+        const month = referenceDate.getMonth() + 1;
         const year = referenceDate.getFullYear();
         const filterParams = { month, year };
 
@@ -414,15 +415,15 @@ exports.getHistorialCitas = async (req, res, next) => {
         let citasFiltradas;
         switch (filterType) {
             case 'day':
-                citasFiltradas = citasDelMes.filter(cita => isSameDay(parseISO(cita.fecha_cita), referenceDate));
+                citasFiltradas = citasDelMes.filter(cita => isSameDay(cita.fecha_cita, referenceDate));
                 break;
             case 'week':
                 const start = startOfWeek(referenceDate, { locale: es });
                 const end = endOfWeek(referenceDate, { locale: es });
-                citasFiltradas = citasDelMes.filter(cita => isWithinInterval(parseISO(cita.fecha_cita), { start, end }));
+                citasFiltradas = citasDelMes.filter(cita => isWithinInterval(cita.fecha_cita, { start, end }));
                 break;
             case 'month':
-                citasFiltradas = citasDelMes; // Ya obtuvimos las del mes
+                citasFiltradas = citasDelMes; 
                 break;
             default:
                 citasFiltradas = [];
@@ -430,7 +431,6 @@ exports.getHistorialCitas = async (req, res, next) => {
         }
 
         res.status(200).json(citasFiltradas);
-
     } catch (error) {
         console.error('Error al obtener historial de citas:', error);
         next(error);
