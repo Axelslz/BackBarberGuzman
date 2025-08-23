@@ -1,7 +1,7 @@
 const db = require('../config/db'); 
 
 class Cita {
-     static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
+    static async crear({ id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, nombre_cliente }) {
         const finalNombreCliente = nombre_cliente ? nombre_cliente : null;
         const result = await db.query(
             'INSERT INTO citas (id_cliente, id_barbero, id_servicio, fecha_cita, hora_inicio, hora_fin, duracion_minutos, estado, nombre_cliente) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
@@ -12,13 +12,37 @@ class Cita {
 
     static async getCitasByBarberoAndDate(idBarbero, fecha) {
         const result = await db.query(
-            `SELECT c.*, u.name as cliente_name, u.lastname as cliente_lastname
-             FROM citas c
-             LEFT JOIN usuarios u ON c.id_cliente = u.id
-             WHERE c.id_barbero = $1 AND c.fecha_cita = $2 AND c.estado NOT IN ('cancelada')`,
+            `SELECT c.*, u.name as cliente_name, u.lastname as cliente_lastname FROM citas c LEFT JOIN usuarios u ON c.id_cliente = u.id WHERE c.id_barbero = $1 AND c.fecha_cita = $2 AND c.estado NOT IN ('cancelada')`,
             [idBarbero, fecha]
         );
         return result.rows;
+    }
+
+    // --- FUNCIÓN PRINCIPAL DEL HISTORIAL SIMPLIFICADA ---
+    static async getAppointments(whereClause = '', params = []) {
+        try {
+            const query = `
+                SELECT
+                    c.id, c.fecha_cita, c.hora_inicio, c.hora_fin, c.estado,
+                    c.duracion_minutos, c.id_cliente, c.id_barbero, c.id_servicio,
+                    COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname), 'Cliente Desconocido') AS cliente_nombre,
+                    COALESCE(CONCAT(u_barbero.name, ' ', u_barbero.lastname), 'Barbero Desconocido') AS barbero_name,
+                    COALESCE(s.nombre, 'Servicio Desconocido') AS servicio_nombre,
+                    COALESCE(s.precio, 0.00) AS servicio_precio
+                FROM citas c
+                LEFT JOIN usuarios u_cliente ON c.id_cliente = u_cliente.id
+                LEFT JOIN barberos b ON c.id_barbero = b.id
+                LEFT JOIN usuarios u_barbero ON b.id_usuario = u_barbero.id
+                LEFT JOIN servicios s ON c.id_servicio = s.id
+                ${whereClause}
+                ORDER BY c.fecha_cita DESC, c.hora_inicio DESC
+            `;
+            const result = await db.query(query, params);
+            return result.rows;
+        } catch (error) {
+            console.error("ERROR EN LA CONSULTA SQL de getAppointments:", error);
+            throw error;
+        }
     }
 
 
@@ -44,42 +68,6 @@ class Cita {
         return result.rowCount > 0;
     }
     
-    static async getAppointments(baseWhereClause = '', params = [], filterParams = {}) {
-        try {
-            let whereClause = baseWhereClause;
-            let queryParams = [...params];
-
-            // Nuevo filtro por mes y año
-            if (filterParams.month && filterParams.year) {
-                whereClause += whereClause ? ' AND' : 'WHERE';
-                whereClause += ` EXTRACT(MONTH FROM c.fecha_cita) = $${queryParams.length + 1} AND EXTRACT(YEAR FROM c.fecha_cita) = $${queryParams.length + 2}`;
-                queryParams.push(filterParams.month, filterParams.year);
-            }
-
-            const query = `
-                SELECT
-                    c.id, c.fecha_cita, c.hora_inicio, c.hora_fin, c.estado,
-                    c.duracion_minutos, c.id_cliente, c.id_barbero, c.id_servicio,
-                    COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname), 'Cliente Desconocido') AS cliente_nombre,
-                    COALESCE(CONCAT(u_barbero.name, ' ', u_barbero.lastname), 'Barbero Desconocido') AS barbero_name,
-                    COALESCE(s.nombre, 'Servicio Desconocido') AS servicio_nombre,
-                    COALESCE(s.precio, 0.00) AS servicio_precio
-                FROM citas c
-                LEFT JOIN usuarios u_cliente ON c.id_cliente = u_cliente.id
-                LEFT JOIN barberos b ON c.id_barbero = b.id
-                LEFT JOIN usuarios u_barbero ON b.id_usuario = u_barbero.id
-                LEFT JOIN servicios s ON c.id_servicio = s.id
-                ${whereClause}
-                ORDER BY c.fecha_cita DESC, c.hora_inicio DESC
-            `;
-            
-            const result = await db.query(query, queryParams);
-            return result.rows;
-        } catch (error) {
-            console.error("ERROR EN LA CONSULTA SQL de getAppointments:", error);
-            throw error;
-        }
-    }
 
     static async getAll(filterParams = {}) { 
         return this.getAppointments('', [], filterParams);
