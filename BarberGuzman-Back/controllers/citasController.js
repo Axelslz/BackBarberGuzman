@@ -4,9 +4,9 @@ const Barbero = require('../models/Barbero');
 const Usuario = require('../models/Usuario');
 const moment = require('moment');
 require('moment/locale/es');
-const { Op } = require('sequelize');
-const { parseISO, isSameDay, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth } = require('date-fns');
+const { parseISO, isSameDay, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfToday } = require('date-fns');
 const { es } = require('date-fns/locale');
+const { Op } = require('sequelize');
 
 const WORK_HOURS = {
     'lunes': { start: '10:00', end: '20:00' },
