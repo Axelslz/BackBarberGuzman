@@ -32,6 +32,7 @@
     "node-cron": "^4.1.0",
     "nodemailer": "^7.0.3",
     "pg": "^8.16.3",
+    "sequelize": "^6.37.7",
     "twilio": "^5.8.0"
   }
 }
