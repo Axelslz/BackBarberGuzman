@@ -26,5 +26,10 @@ router.delete('/unblock-time/:id', authenticateToken, authorizeRole(['admin', 's
 router.get('/all', authenticateToken, authorizeRole(['admin', 'super_admin']), getAllCitas);
 router.get('/user/:userId', authenticateToken, authorizeRole(['cliente', 'admin', 'super_admin']), getCitasByUserId); 
 router.get('/barber/:barberId', authenticateToken, authorizeRole(['admin', 'super_admin', 'barber']), getCitasByBarberId); 
+router.get('/historial',
+    authenticateToken,
+    authorizeRole(['cliente', 'admin', 'super_admin', 'barber']),
+    getHistorialCitas
+);
 
 module.exports = router;

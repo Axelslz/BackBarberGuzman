@@ -4,6 +4,7 @@ const Barbero = require('../models/Barbero');
 const Usuario = require('../models/Usuario');
 const moment = require('moment');
 require('moment/locale/es');
+const { Op } = require('sequelize');
 const { parseISO, isSameDay, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth } = require('date-fns');
 const { es } = require('date-fns/locale');
 
@@ -222,12 +223,10 @@ exports.unblockTimeForBarber = async (req, res, next) => {
             return res.status(404).json({ message: 'Bloqueo de horario no encontrado.' });
         }
 
-        // Verificar permisos
         if (!['barber', 'admin', 'super_admin'].includes(role)) {
             return res.status(403).json({ message: 'No tienes permiso para gestionar horarios de barbero.' });
         }
 
-        // Un barbero solo puede liberar su propio horario
         if (role === 'barber' && userBarberoId.toString() !== unavailableTimeEntry.id_barbero.toString()) {
             return res.status(403).json({ message: 'No tienes permiso para liberar el horario de otro barbero.' });
         }
@@ -373,29 +372,62 @@ exports.crearCita = async (req, res, next) => {
 exports.getHistorialCitas = async (req, res, next) => {
     try {
         const { role, id: userId, id_barbero: userBarberoId } = req.user;
-        const { startDate, endDate } = req.query;
-        let whereClause = '';
-        let params = [];
+        const { periodo } = req.query; 
 
-        // Paso 1: Filtrar por rol
-        if (role === 'cliente') {
-            whereClause = 'WHERE c.id_cliente = $1';
-            params.push(userId);
-        } else if (role === 'admin' && userBarberoId) {
-            whereClause = 'WHERE c.id_barbero = $1';
-            params.push(userBarberoId);
-        }
-        // Para super_admin, no hay filtro inicial de rol
+        let fechaInicio;
 
-        // Paso 2: Añadir filtro por fecha si existe
-        if (startDate && endDate) {
-            whereClause += whereClause ? ' AND' : 'WHERE';
-            whereClause += ` c.fecha_cita BETWEEN $${params.length + 1} AND $${params.length + 2}`;
-            params.push(startDate, endDate);
+        switch (periodo) {
+            case 'dia':
+                fechaInicio = startOfToday();
+                break;
+            case 'semana':
+                fechaInicio = startOfWeek(new Date(), { weekStartsOn: 1 });
+                break;
+            case 'mes':
+                fechaInicio = startOfMonth(new Date());
+                break;
+            case 'todo':
+                fechaInicio = null; 
+                break;
+            default:
+                fechaInicio = startOfToday(); 
         }
-        
-        const citas = await Cita.getAppointments(whereClause, params);
-        res.status(200).json(citas);
+        const whereClause = {};
+
+        if (fechaInicio) {
+            whereClause.fecha_cita = {
+                [Op.gte]: fechaInicio
+            };
+        }
+
+        if (role === 'super_admin') {
+           
+        } else if (role === 'admin' || role === 'barber') {
+            whereClause.id_barbero = userBarberoId;
+        } else if (role === 'cliente') {
+            whereClause.id_cliente = userId;
+        } else {
+            return res.status(200).json([]);
+        }
+
+        const historialCitas = await Cita.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: Usuario,
+                    as: 'cliente', 
+                    attributes: ['nombre', 'apellido'] 
+                },
+                {
+                    model: Barbero,
+                    as: 'barbero', 
+                    attributes: ['nombre', 'apellido']
+                }
+            ],
+            order: [['fecha_cita', 'DESC'], ['hora_inicio', 'DESC']] 
+        });
+
+        res.status(200).json(historialCitas);
 
     } catch (error) {
         console.error('Error al obtener historial de citas:', error);
