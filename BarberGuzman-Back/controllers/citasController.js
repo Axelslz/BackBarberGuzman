@@ -371,11 +371,12 @@ exports.crearCita = async (req, res, next) => {
 };
 exports.getHistorialCitas = async (req, res, next) => {
     try {
+        // 1. Extraer datos de la petición (esto no cambia)
         const { role, id: userId, id_barbero: userBarberoId } = req.user;
-        const { periodo } = req.query; 
+        const { periodo } = req.query;
 
+        // 2. Definir el rango de fechas (esto no cambia)
         let fechaInicio;
-
         switch (periodo) {
             case 'dia':
                 fechaInicio = startOfToday();
@@ -387,45 +388,43 @@ exports.getHistorialCitas = async (req, res, next) => {
                 fechaInicio = startOfMonth(new Date());
                 break;
             case 'todo':
-                fechaInicio = null; 
+                fechaInicio = null;
                 break;
             default:
-                fechaInicio = startOfToday(); 
+                fechaInicio = startOfToday();
         }
-        const whereClause = {};
 
+        // 3. Construir la consulta SQL y los parámetros
+        let whereClause = '';
+        let params = [];
+        let paramIndex = 1;
+
+        // Añadir filtro de fecha si no es 'todo'
         if (fechaInicio) {
-            whereClause.fecha_cita = {
-                [Op.gte]: fechaInicio
-            };
+            whereClause += `WHERE c.fecha_cita >= $${paramIndex++}`;
+            params.push(fechaInicio);
         }
 
+        // 4. Aplicar filtros según el ROL del usuario
         if (role === 'super_admin') {
-           
+            // El super_admin ve todo. No se añade ninguna condición extra.
         } else if (role === 'admin' || role === 'barber') {
-            whereClause.id_barbero = userBarberoId;
+            // El 'admin' o 'barber' solo ve las citas de su propio id_barbero
+            whereClause += whereClause ? ' AND' : 'WHERE';
+            whereClause += ` c.id_barbero = $${paramIndex++}`;
+            params.push(userBarberoId);
         } else if (role === 'cliente') {
-            whereClause.id_cliente = userId;
+            // El 'cliente' solo ve sus propias citas
+            whereClause += whereClause ? ' AND' : 'WHERE';
+            whereClause += ` c.id_cliente = $${paramIndex++}`;
+            params.push(userId);
         } else {
+            // Si por alguna razón llega un rol no esperado, devolvemos un array vacío
             return res.status(200).json([]);
         }
 
-        const historialCitas = await Cita.findAll({
-            where: whereClause,
-            include: [
-                {
-                    model: Usuario,
-                    as: 'cliente', 
-                    attributes: ['nombre', 'apellido'] 
-                },
-                {
-                    model: Barbero,
-                    as: 'barbero', 
-                    attributes: ['nombre', 'apellido']
-                }
-            ],
-            order: [['fecha_cita', 'DESC'], ['hora_inicio', 'DESC']] 
-        });
+        // 5. Ejecutar la consulta final usando TU método existente
+        const historialCitas = await Cita.getAppointments(whereClause, params);
 
         res.status(200).json(historialCitas);
 
