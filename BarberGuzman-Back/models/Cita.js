@@ -23,13 +23,14 @@ class Cita {
         const baseQuery = `
             SELECT 
                 c.id,
-                c.fecha AS fecha_cita,
+                c.fecha_cita,
                 c.hora_inicio,
                 c.hora_fin,
                 c.estado,
-                c.id_barbers AS id_barbero,
+                c.id_barbero,
                 c.id_cliente,
-                c.nombre_cliente_varchar AS cliente_name,
+                u.name AS cliente_name,
+                u.lastname AS cliente_lastname,
                 b.nombre AS barbero_name,
                 b.apellido AS barbero_lastname,
                 s.nombre AS servicio_nombre,
@@ -37,25 +38,21 @@ class Cita {
             FROM 
                 citas c
             LEFT JOIN 
-                barberos b ON c.id_barberos = b.id_barbeor -- CORRECCIÓN 1: b.id_barber
+                usuarios u ON c.id_cliente = u.id
             LEFT JOIN 
-                servicios s ON c.id_servicios = s.id_servicio -- CORRECCIÓN 2: c.id_servicios y s.id_servicio
+                barberos b ON c.id_barbero = b.id
+            LEFT JOIN 
+                servicios s ON c.id_servicio = s.id
         `;
-
-        const finalWhereClause = whereClause
-            .replace(/c\.fecha_cita/g, 'c.fecha')
-            .replace(/c\.id_barbero/g, 'c.id_barbers');
 
         const finalQuery = `
             ${baseQuery}
-            ${finalWhereClause}
+            ${whereClause}
             ORDER BY 
-                c.fecha DESC, c.hora_inicio DESC
+                c.fecha_cita DESC, c.hora_inicio DESC
         `;
         
         try {
-            console.log("Ejecutando consulta:", finalQuery); 
-            console.log("Con parámetros:", params); 
             const { rows } = await db.query(finalQuery, params);
             return rows;
         } catch (error) {

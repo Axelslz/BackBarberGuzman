@@ -83,6 +83,7 @@ async function initializeDatabase() {
                 duracion_minutos INT NOT NULL DEFAULT 60,
                 contador_actualizado BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                nombre_cliente VARCHAR(100) NOT NULL,
                 FOREIGN KEY (id_cliente) REFERENCES usuarios(id) ON DELETE CASCADE,
                 FOREIGN KEY (id_barbero) REFERENCES barberos(id) ON DELETE CASCADE,
                 FOREIGN KEY (id_servicio) REFERENCES servicios(id) ON DELETE CASCADE,

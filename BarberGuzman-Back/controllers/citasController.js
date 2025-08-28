@@ -401,29 +401,29 @@ exports.getHistorialCitas = async (req, res, next) => {
 
         // Añadir filtro de fecha si no es 'todo'
         if (fechaInicio) {
+            // Usamos el nombre de columna correcto: fecha_cita
             whereClause += `WHERE c.fecha_cita >= $${paramIndex++}`;
             params.push(fechaInicio);
         }
 
         // 4. Aplicar filtros según el ROL del usuario
         if (role === 'super_admin') {
-            // El super_admin ve todo. No se añade ninguna condición extra.
+            // Sin filtro extra
         } else if (role === 'admin' || role === 'barber') {
-            // El 'admin' o 'barber' solo ve las citas de su propio id_barbero
             whereClause += whereClause ? ' AND' : 'WHERE';
+            // Usamos el nombre de columna correcto: id_barbero
             whereClause += ` c.id_barbero = $${paramIndex++}`;
             params.push(userBarberoId);
         } else if (role === 'cliente') {
-            // El 'cliente' solo ve sus propias citas
             whereClause += whereClause ? ' AND' : 'WHERE';
+            // Usamos el nombre de columna correcto: id_cliente
             whereClause += ` c.id_cliente = $${paramIndex++}`;
             params.push(userId);
         } else {
-            // Si por alguna razón llega un rol no esperado, devolvemos un array vacío
             return res.status(200).json([]);
         }
 
-        // 5. Ejecutar la consulta final usando TU método existente
+        // 5. Ejecutar la consulta final
         const historialCitas = await Cita.getAppointments(whereClause, params);
 
         res.status(200).json(historialCitas);
