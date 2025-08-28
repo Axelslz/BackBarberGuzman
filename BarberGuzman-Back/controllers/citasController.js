@@ -4,7 +4,7 @@ const Barbero = require('../models/Barbero');
 const Usuario = require('../models/Usuario');
 const moment = require('moment');
 require('moment/locale/es');
-const { parseISO, isSameDay, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfToday } = require('date-fns');
+const { startOfToday, startOfWeek, startOfMonth } = require('date-fns');
 const { es } = require('date-fns/locale');
 const { Op } = require('sequelize');
 
@@ -371,11 +371,9 @@ exports.crearCita = async (req, res, next) => {
 };
 exports.getHistorialCitas = async (req, res, next) => {
     try {
-        // 1. Extraer datos de la petición (esto no cambia)
         const { role, id: userId, id_barbero: userBarberoId } = req.user;
         const { periodo } = req.query;
 
-        // 2. Definir el rango de fechas (esto no cambia)
         let fechaInicio;
         switch (periodo) {
             case 'dia':
@@ -387,43 +385,33 @@ exports.getHistorialCitas = async (req, res, next) => {
             case 'mes':
                 fechaInicio = startOfMonth(new Date());
                 break;
-            case 'todo':
+            default: 
                 fechaInicio = null;
                 break;
-            default:
-                fechaInicio = startOfToday();
         }
 
-        // 3. Construir la consulta SQL y los parámetros
         let whereClause = '';
         let params = [];
         let paramIndex = 1;
 
-        // Añadir filtro de fecha si no es 'todo'
         if (fechaInicio) {
-            // Usamos el nombre de columna correcto: fecha_cita
             whereClause += `WHERE c.fecha_cita >= $${paramIndex++}`;
             params.push(fechaInicio);
         }
 
-        // 4. Aplicar filtros según el ROL del usuario
         if (role === 'super_admin') {
-            // Sin filtro extra
         } else if (role === 'admin' || role === 'barber') {
             whereClause += whereClause ? ' AND' : 'WHERE';
-            // Usamos el nombre de columna correcto: id_barbero
             whereClause += ` c.id_barbero = $${paramIndex++}`;
             params.push(userBarberoId);
         } else if (role === 'cliente') {
             whereClause += whereClause ? ' AND' : 'WHERE';
-            // Usamos el nombre de columna correcto: id_cliente
             whereClause += ` c.id_cliente = $${paramIndex++}`;
             params.push(userId);
         } else {
             return res.status(200).json([]);
         }
-
-        // 5. Ejecutar la consulta final
+   
         const historialCitas = await Cita.getAppointments(whereClause, params);
 
         res.status(200).json(historialCitas);
