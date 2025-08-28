@@ -19,16 +19,17 @@ class Cita {
     }
 
     static async getAppointments(whereClause = '', params = []) {
+        
         const baseQuery = `
             SELECT 
                 c.id,
-                c.fecha AS fecha_cita, -- Usamos 'fecha' como se llama en tu BD
+                c.fecha AS fecha_cita,
                 c.hora_inicio,
                 c.hora_fin,
                 c.estado,
-                c.id_barbers AS id_barbero, -- Usamos 'id_barbers' como se llama en tu BD
+                c.id_barbers AS id_barbero,
                 c.id_cliente,
-                c.nombre_cliente_varchar AS cliente_name, -- LA CORRECCIÓN PRINCIPAL: Usamos el nombre guardado en la cita
+                c.nombre_cliente_varchar AS cliente_name,
                 b.nombre AS barbero_name,
                 b.apellido AS barbero_lastname,
                 s.nombre AS servicio_nombre,
@@ -36,19 +37,25 @@ class Cita {
             FROM 
                 citas c
             LEFT JOIN 
-                barberos b ON c.id_barbers = b.id -- Unimos con 'barberos' usando 'id_barbers'
+                barberos b ON c.id_barbers = b.id_barber -- CORRECCIÓN 1: b.id_barber
             LEFT JOIN 
-                servicios s ON c.id_ser = s.id -- Unimos con 'servicios' usando 'id_ser'
+                servicios s ON c.id_servicios = s.id_servicio -- CORRECCIÓN 2: c.id_servicios y s.id_servicio
         `;
+
+        const finalWhereClause = whereClause
+            .replace(/c\.fecha_cita/g, 'c.fecha')
+            .replace(/c\.id_barbero/g, 'c.id_barbers');
 
         const finalQuery = `
             ${baseQuery}
-            ${whereClause.replace('c.fecha_cita', 'c.fecha').replace('c.id_barbero', 'c.id_barbers')}
+            ${finalWhereClause}
             ORDER BY 
                 c.fecha DESC, c.hora_inicio DESC
         `;
         
         try {
+            console.log("Ejecutando consulta:", finalQuery); 
+            console.log("Con parámetros:", params); 
             const { rows } = await db.query(finalQuery, params);
             return rows;
         } catch (error) {
