@@ -18,29 +18,44 @@ class Cita {
         return result.rows;
     }
 
-    // --- FUNCIÓN PRINCIPAL DEL HISTORIAL SIMPLIFICADA ---
     static async getAppointments(whereClause = '', params = []) {
+        const baseQuery = `
+            SELECT 
+                c.id,
+                c.fecha_cita,
+                c.hora_inicio,
+                c.hora_fin,
+                c.estado,
+                c.id_barbero,
+                c.id_cliente,
+                u.nombre AS cliente_name,
+                u.apellido AS cliente_lastname,
+                b.nombre AS barbero_name,
+                b.apellido AS barbero_lastname,
+                s.nombre AS servicio_nombre,
+                s.precio AS servicio_precio
+            FROM 
+                citas c
+            LEFT JOIN 
+                usuarios u ON c.id_cliente = u.id
+            LEFT JOIN 
+                barberos b ON c.id_barbero = b.id
+            LEFT JOIN 
+                servicios s ON c.id_servicio = s.id
+        `;
+
+        const finalQuery = `
+            ${baseQuery}
+            ${whereClause}
+            ORDER BY 
+                c.fecha_cita DESC, c.hora_inicio DESC
+        `;
+        
         try {
-            const query = `
-                SELECT
-                    c.id, c.fecha_cita, c.hora_inicio, c.hora_fin, c.estado,
-                    c.duracion_minutos, c.id_cliente, c.id_barbero, c.id_servicio,
-                    COALESCE(c.nombre_cliente, CONCAT(u_cliente.name, ' ', u_cliente.lastname), 'Cliente Desconocido') AS cliente_nombre,
-                    COALESCE(CONCAT(u_barbero.name, ' ', u_barbero.lastname), 'Barbero Desconocido') AS barbero_name,
-                    COALESCE(s.nombre, 'Servicio Desconocido') AS servicio_nombre,
-                    COALESCE(s.precio, 0.00) AS servicio_precio
-                FROM citas c
-                LEFT JOIN usuarios u_cliente ON c.id_cliente = u_cliente.id
-                LEFT JOIN barberos b ON c.id_barbero = b.id
-                LEFT JOIN usuarios u_barbero ON b.id_usuario = u_barbero.id
-                LEFT JOIN servicios s ON c.id_servicio = s.id
-                ${whereClause}
-                ORDER BY c.fecha_cita DESC, c.hora_inicio DESC
-            `;
-            const result = await db.query(query, params);
-            return result.rows;
+            const { rows } = await db.query(finalQuery, params);
+            return rows;
         } catch (error) {
-            console.error("ERROR EN LA CONSULTA SQL de getAppointments:", error);
+            console.error("Error en la consulta de getAppointments:", error);
             throw error;
         }
     }
