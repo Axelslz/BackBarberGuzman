@@ -37,7 +37,7 @@ class Cita {
             FROM 
                 citas c
             LEFT JOIN 
-                barberos b ON c.id_barbers = b.id_barber -- CORRECCIÓN 1: b.id_barber
+                barberos b ON c.id_barberos = b.id_barbeor -- CORRECCIÓN 1: b.id_barber
             LEFT JOIN 
                 servicios s ON c.id_servicios = s.id_servicio -- CORRECCIÓN 2: c.id_servicios y s.id_servicio
         `;
