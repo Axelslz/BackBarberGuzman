@@ -4,7 +4,7 @@ const Barbero = require('../models/Barbero');
 const Usuario = require('../models/Usuario');
 const moment = require('moment');
 require('moment/locale/es');
-const { startOfToday, startOfWeek, startOfMonth } = require('date-fns');
+const { startOfToday, startOfWeek, startOfMonth, format } = require('date-fns');
 const { es } = require('date-fns/locale');
 const { Op } = require('sequelize');
 
@@ -395,8 +395,11 @@ exports.getHistorialCitas = async (req, res, next) => {
         let paramIndex = 1;
 
         if (fechaInicio) {
+          
+            const fechaFormateada = format(fechaInicio, 'yyyy-MM-dd');
+            
             whereClause += `WHERE c.fecha_cita >= $${paramIndex++}`;
-            params.push(fechaInicio);
+            params.push(fechaFormateada);
         }
 
         if (role === 'super_admin') {
@@ -408,12 +411,9 @@ exports.getHistorialCitas = async (req, res, next) => {
             whereClause += whereClause ? ' AND' : 'WHERE';
             whereClause += ` c.id_cliente = $${paramIndex++}`;
             params.push(userId);
-        } else {
-            return res.status(200).json([]);
         }
-   
+        
         const historialCitas = await Cita.getAppointments(whereClause, params);
-
         res.status(200).json(historialCitas);
 
     } catch (error) {
