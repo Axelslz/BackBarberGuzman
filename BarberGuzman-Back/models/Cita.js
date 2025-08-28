@@ -22,14 +22,13 @@ class Cita {
         const baseQuery = `
             SELECT 
                 c.id,
-                c.fecha_cita,
+                c.fecha AS fecha_cita, -- Usamos 'fecha' como se llama en tu BD
                 c.hora_inicio,
                 c.hora_fin,
                 c.estado,
-                c.id_barbero,
+                c.id_barbers AS id_barbero, -- Usamos 'id_barbers' como se llama en tu BD
                 c.id_cliente,
-                u.nombre AS cliente_name,
-                u.apellido AS cliente_lastname,
+                c.nombre_cliente_varchar AS cliente_name, -- LA CORRECCIÓN PRINCIPAL: Usamos el nombre guardado en la cita
                 b.nombre AS barbero_name,
                 b.apellido AS barbero_lastname,
                 s.nombre AS servicio_nombre,
@@ -37,18 +36,16 @@ class Cita {
             FROM 
                 citas c
             LEFT JOIN 
-                usuarios u ON c.id_cliente = u.id
+                barberos b ON c.id_barbers = b.id -- Unimos con 'barberos' usando 'id_barbers'
             LEFT JOIN 
-                barberos b ON c.id_barbero = b.id
-            LEFT JOIN 
-                servicios s ON c.id_servicio = s.id
+                servicios s ON c.id_ser = s.id -- Unimos con 'servicios' usando 'id_ser'
         `;
 
         const finalQuery = `
             ${baseQuery}
-            ${whereClause}
+            ${whereClause.replace('c.fecha_cita', 'c.fecha').replace('c.id_barbero', 'c.id_barbers')}
             ORDER BY 
-                c.fecha_cita DESC, c.hora_inicio DESC
+                c.fecha DESC, c.hora_inicio DESC
         `;
         
         try {
