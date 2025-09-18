@@ -20,6 +20,10 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+app.get('/', (req, res) => {
+    res.status(200).send('Servidor en línea');
+});
+
 app.use(helmet());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
