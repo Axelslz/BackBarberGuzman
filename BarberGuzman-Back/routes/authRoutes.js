@@ -11,6 +11,8 @@ router.post('/set-password', authController.setPassword);
 router.get('/me', authenticateToken, authController.getMe);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
+router.post('/refresh-token', authController.refreshToken);
+router.post('/logout', authController.logout);
 router.put('/profile', authenticateToken, uploadUserProfileImage, authController.updateProfile);
 
 router.get('/users', authenticateToken, authorizeRole(['super_admin']), authController.getAllUsers);
