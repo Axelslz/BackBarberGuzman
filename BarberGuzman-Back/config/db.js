@@ -25,6 +25,7 @@ async function initializeDatabase() {
                 password VARCHAR(255) NOT NULL,
                 role VARCHAR(50) NOT NULL DEFAULT 'cliente' CHECK (role IN ('cliente', 'admin', 'super_admin', 'barber')),
                 citas_completadas INT DEFAULT 0,
+                refreshToken VARCHAR(512) DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 resetPasswordToken VARCHAR(255) DEFAULT NULL,
                 resetPasswordExpires TIMESTAMP DEFAULT NULL,
