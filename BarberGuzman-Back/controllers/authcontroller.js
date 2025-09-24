@@ -119,12 +119,17 @@ exports.login = async (req, res, next) => {
             ...(id_barbero && { id_barbero: id_barbero })
         };
 
+        // --- INICIO DE LA CORRECCIÓN ---
 
-        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+        // Generamos ambos tokens
+        const tokens = generateTokens(payload);
+
+        await Usuario.setRefreshToken(user.id, tokens.refreshToken);
 
         res.status(200).json({
             message: 'Inicio de sesión exitoso',
-            token,
+            accessToken: tokens.accessToken, 
+            refreshToken: tokens.refreshToken, 
             user: {
                 id: user.id,
                 name: user.name,
@@ -136,11 +141,13 @@ exports.login = async (req, res, next) => {
             }
         });
 
+
     } catch (error) {
         console.error('Error al iniciar sesión:', error);
         next(error);
     }
 };
+
 
 exports.googleLogin = async (req, res, next) => {
     try {
