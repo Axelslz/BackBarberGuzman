@@ -45,8 +45,7 @@ class Usuario {
         `, [id]);
         return result.rows[0];
     }
-    
-    // Función corregida:
+
     static async updateProfile(id, data) {
         let query = 'UPDATE usuarios SET ';
         const values = [];
@@ -163,8 +162,24 @@ class Usuario {
         );
         return result.rowCount > 0;
     }
+     static async setRefreshToken(id, refreshToken) {
+        const result = await db.query(
+            'UPDATE usuarios SET "refreshToken" = $1 WHERE id = $2',
+            [refreshToken, id]
+        );
+        return result.rowCount > 0;
+    }
 
-    // Esta es la función que faltaba para vincular el perfil de barbero.
+    static async findByRefreshToken(refreshToken) {
+        const result = await db.query('SELECT * FROM usuarios WHERE "refreshToken" = $1', [refreshToken]);
+        return result.rows[0];
+    }
+
+    static async clearRefreshToken(id) {
+        const result = await db.query('UPDATE usuarios SET "refreshToken" = NULL WHERE id = $1', [id]);
+        return result.rowCount > 0;
+    }
+
     static async updateBarberoId(userId, barberoId) {
         const result = await db.query(
             'UPDATE usuarios SET id_barbero = $1 WHERE id = $2',

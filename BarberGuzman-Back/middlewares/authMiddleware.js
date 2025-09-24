@@ -10,9 +10,9 @@ exports.authenticateToken = (req, res, next) => {
 
     jwt.verify(token, process.env.JWT_SECRET, (err, decodedUser) => {
         if (err) {
-
+            
             if (err.name === 'TokenExpiredError') {
-                return res.status(401).json({ message: 'Token expirado. Por favor, inicia sesión de nuevo.' });
+                return res.status(401).json({ message: 'Token expirado. Refresque la sesión.', isExpired: true });
             }
             if (err.name === 'JsonWebTokenError') {
                 return res.status(403).json({ message: 'Token inválido. Acceso denegado.' });

@@ -16,14 +16,14 @@ const getBarberoIdForUser = async (userId, userRole) => {
         if (barbero) {
             barberoId = barbero.id;
         } else {
-            // Si el usuario es admin o super_admin pero no tiene un perfil de barbero, lo creamos
+
             const user = await Usuario.findById(userId);
             if (user) {
                 const newBarbero = await Barbero.create({
                     id_usuario: userId,
                     nombre: user.name,
                     apellido: user.lastname,
-                    especialidad: user.role // Asignamos el rol como especialidad por defecto
+                    especialidad: user.role 
                 });
                 barberoId = newBarbero.id;
                 await Usuario.updateBarberoId(userId, barberoId);
@@ -49,6 +49,12 @@ const getPublicIdFromCloudinaryUrl = (url) => {
     return null;
 };
 
+const generateTokens = (payload) => {
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '15m' });
+    const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    return { accessToken, refreshToken };
+};
+
 
 exports.registrar = async (req, res, next) => {
     try {
@@ -68,17 +74,20 @@ exports.registrar = async (req, res, next) => {
             password: hashedPassword,
             role: userRole
         });
+  
+        const tokens = generateTokens({ id: newUser.id, role: newUser.role });
 
-        const token = jwt.sign({ id: newUser.id, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        await Usuario.setRefreshToken(newUser.id, tokens.refreshToken);
 
         res.status(201).json({
             message: 'Usuario registrado exitosamente',
-            token,
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
             user: { id: newUser.id, name: newUser.name, lastname: newUser.lastname, correo: newUser.correo, role: newUser.role }
         });
 
     } catch (error) {
-        if (error.code === 'ER_DUP_ENTRY' || error.errno === 1062) {
+        if (error.code === '23505') { 
             return res.status(409).json({ message: 'El correo electrónico ya está registrado.' });
         }
         console.error('Error al registrar usuario:', error);
@@ -301,7 +310,7 @@ exports.updateProfile = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const updates = req.body;
-        // Agregamos un log para ver qué datos llegan en la petición
+
         console.log('Datos recibidos para actualizar el perfil:', updates);
         console.log('Archivo subido:', req.file);
 
@@ -322,7 +331,6 @@ exports.updateProfile = async (req, res, next) => {
             profilePictureUrl = req.file.path;
         }
 
-        // Si no hay datos para actualizar ni una imagen, retornamos un 400
         if (Object.keys(updates).length === 0 && !req.file) {
             return res.status(400).json({ message: 'No se proporcionaron datos para actualizar el perfil.' });
         }
@@ -520,7 +528,57 @@ exports.resetPassword = async (req, res, next) => {
     }
 };
 
+exports.refreshToken = async (req, res, next) => {
+    const { refreshToken } = req.body;
 
+    if (!refreshToken) {
+        return res.status(401).json({ message: 'Token de actualización no proporcionado.' });
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        const user = await Usuario.findByRefreshToken(refreshToken);
+
+        if (!user) {
+            return res.status(403).json({ message: 'Token de actualización inválido o no encontrado.' });
+        }
+
+        const id_barbero = await getBarberoIdForUser(user.id, user.role);
+        const newPayload = {
+            id: user.id,
+            role: user.role,
+            name: user.name,
+            lastname: user.lastname,
+            ...(id_barbero && { id_barbero: id_barbero })
+        };
+
+        const newAccessToken = jwt.sign(newPayload, process.env.JWT_SECRET, { expiresIn: '15m' });
+
+        res.status(200).json({ accessToken: newAccessToken });
+
+    } catch (error) {
+        console.error('Error al refrescar el token:', error);
+        return res.status(403).json({ message: 'Token de actualización inválido.' });
+    }
+};
+
+exports.logout = async (req, res, next) => {
+    try {
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+            return res.status(400).json({ message: 'No se proporcionó token de actualización.' });
+        }
+
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        await Usuario.clearRefreshToken(decoded.id);
+
+        res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
+
+    } catch (error) {
+        console.error('Error al cerrar sesión:', error);
+        next(error);
+    }
+};
 
 
 
