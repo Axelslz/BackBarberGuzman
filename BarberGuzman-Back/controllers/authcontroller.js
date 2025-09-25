@@ -97,14 +97,15 @@ exports.registrar = async (req, res, next) => {
 
 exports.login = async (req, res, next) => {
     try {
-        const { correo, password } = req.body;
+        
+        const { correo, contrasena } = req.body;
 
         const user = await Usuario.findByCorreo(correo);
         if (!user) {
             return res.status(400).json({ message: 'Credenciales inválidas.' });
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(contrasena, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Credenciales inválidas.' });
         }
@@ -118,18 +119,14 @@ exports.login = async (req, res, next) => {
             lastname: user.lastname,
             ...(id_barbero && { id_barbero: id_barbero })
         };
-
-        // --- INICIO DE LA CORRECCIÓN ---
-
-        // Generamos ambos tokens
+        
         const tokens = generateTokens(payload);
-
         await Usuario.setRefreshToken(user.id, tokens.refreshToken);
 
         res.status(200).json({
             message: 'Inicio de sesión exitoso',
-            accessToken: tokens.accessToken, 
-            refreshToken: tokens.refreshToken, 
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
             user: {
                 id: user.id,
                 name: user.name,
@@ -140,7 +137,6 @@ exports.login = async (req, res, next) => {
                 ...(id_barbero && { id_barbero: id_barbero })
             }
         });
-
 
     } catch (error) {
         console.error('Error al iniciar sesión:', error);
